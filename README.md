@@ -247,52 +247,6 @@ export type StudentScreenProps<T extends keyof StudentTabParamList> =
 - Administratorske opcije
 - Izvještaji sustava
 
-## 🎯 Trenutna Faza Razvoja
-
-### Završeno ✅
-
-1. **Infrastruktura projekta**
-   - Expo React Native setup s TypeScript podrškom
-   - NativeWind konfiguracija za stiliziranje
-   - React Navigation s tipiziranim routing-om
-
-2. **Sustav tema**
-   - Kompletna implementacija tamnog/svijetlog načina rada
-   - Context API za upravljanje stanjem teme
-   - Dinamičko stiliziranje komponenti
-
-3. **Navigacijska arhitektura**
-   - Role-based routing (student/osoblje)
-   - TypeScript tipiziranje navigacije
-   - Tab i stack navigatori s ikonama
-
-4. **Osnovni ekrani**
-   - Placeholder komponente za sve ekrane
-   - Konzistentno stiliziranje
-   - Tema integracija
-
-### U Tijeku 🔄
-
-- **Mock podatci i TypeScript interfejsi** za opremu i korisnike
-- **EquipmentCard komponenta** za prikaz opreme
-- **Poboljšani Home ekran** s grid layoutom
-
-### Planirano 📅
-
-1. **Faza 1.2: UI implementacija**
-   - Kompletni UI s mock podacima
-   - Funkcionalnost pretraživanja i filtriranja
-   - Rezervacijski sustav
-
-2. **Faza 2: Backend integracija**
-   - Node.js/Fastify API
-   - PostgreSQL baza podataka
-   - Prisma ORM
-
-3. **Faza 3: AAI@EduHr integracija**
-   - Sveučilišna autentifikacija
-   - OpenID Connect protokol
-   - Korisničke dozvole
 
 ## 🔧 Razvojni Workflow
 
@@ -406,28 +360,7 @@ npm run lint
 - **Expo DevTools** za testiranje
 - **Flipper** za napredni debugging
 
-## 🤝 Doprinošenje
-
-### Git Workflow
-1. Stvori feature branch: `git checkout -b feature/nova-funkcionalnost`
-2. Commit promjene: `git commit -m "Dodaj novu funkcionalnost"`
-3. Push branch: `git push origin feature/nova-funkcionalnost`
-4. Stvori Pull Request
-
-### Coding Standards
-- **TypeScript** za sve nove datoteke
-- **Funkcionalne komponente** s hookovima
-- **NativeWind klase** za stiliziranje
-- **Hrvatska lokalizacija** za UI tekstove
-- **Dosljedne naming konvencije**
-
-## 📞 Kontakt
-
-**Razvojni Tim**  
-**Projekt:** Završni rad APU  
-**Email:** [kontakt@example.com]
-
 ---
 
 **Zadnja Ažuriranje:** 21. srpnja 2025  
-**Status:** Aktivni razvoj - Faza 1.1
+**Projekt:** Završni rad APU
