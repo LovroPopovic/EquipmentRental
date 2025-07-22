@@ -3,6 +3,7 @@
     "name": "EquipmentRentalApp",
     "slug": "EquipmentRentalApp",
     "version": "1.0.0",
+    "scheme": "apuoprema",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
