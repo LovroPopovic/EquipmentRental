@@ -7,7 +7,13 @@ export const mockEquipment = [
     description: 'DSLR kamera za početnike, 24.2MP, AF-P DX NIKKOR objektiv',
     available: true,
     location: 'Studio A',
-    imageUrl: null, // Will use placeholder
+    imageUrl: null,
+    borrower: null,
+    owner: {
+      name: 'Prof. Marko Novak',
+      role: 'profesor',
+      email: 'marko.novak@apu.hr',
+    },
   },
   {
     id: 2,
@@ -17,6 +23,8 @@ export const mockEquipment = [
     available: true,
     location: 'Oprema sala',
     imageUrl: null,
+    borrower: null,
+    owner: null, // University equipment
   },
   {
     id: 3,
@@ -26,15 +34,28 @@ export const mockEquipment = [
     available: false,
     location: 'Rezerviran',
     imageUrl: null,
+    borrower: {
+      name: 'Ana Marković',
+      role: 'student',
+      email: 'ana.markovic@apu.hr',
+      borrowedUntil: '2024-09-25',
+    },
+    owner: {
+      name: 'Prof. Ivo Kovač',
+      role: 'profesor',
+      email: 'ivo.kovac@apu.hr',
+    },
   },
   {
     id: 4,
     name: 'Nikon D5600',
-    category: 'Kamere', 
+    category: 'Kamere',
     description: 'DSLR kamera s Wi-Fi, 24.2MP, okretni LCD ekran',
     available: true,
     location: 'Studio B',
     imageUrl: null,
+    borrower: null,
+    owner: null, // University equipment
   },
   {
     id: 5,
@@ -44,6 +65,12 @@ export const mockEquipment = [
     available: true,
     location: 'Studio C',
     imageUrl: null,
+    borrower: null,
+    owner: {
+      name: 'Prof. Milan Horvat',
+      role: 'profesor',
+      email: 'milan.horvat@apu.hr',
+    },
   },
   {
     id: 6,
@@ -53,15 +80,37 @@ export const mockEquipment = [
     available: false,
     location: 'Rezerviran',
     imageUrl: null,
+    borrower: {
+      name: 'Prof. Marko Petrović',
+      role: 'profesor',
+      email: 'marko.petrovic@apu.hr',
+      borrowedUntil: '2024-09-22',
+    },
+    owner: {
+      name: 'Prof. Sandra Miletić',
+      role: 'profesor',
+      email: 'sandra.miletic@apu.hr',
+    },
   },
   {
     id: 7,
     name: 'Canon EOS 2000D',
     category: 'Kamere',
     description: 'Entry-level DSLR, 24.1MP, Wi-Fi povezivanje',
-    available: true,
-    location: 'Studio A',
+    available: false,
+    location: 'Rezerviran',
     imageUrl: null,
+    borrower: {
+      name: 'Petra Novak',
+      role: 'student',
+      email: 'petra.novak@apu.hr',
+      borrowedUntil: '2024-09-20',
+    },
+    owner: {
+      name: 'Prof. Tomislav Babić',
+      role: 'profesor',
+      email: 'tomislav.babic@apu.hr',
+    },
   },
   {
     id: 8,
@@ -71,6 +120,8 @@ export const mockEquipment = [
     available: true,
     location: 'Grafička sala',
     imageUrl: null,
+    borrower: null,
+    owner: null, // University equipment
   },
 ];
 

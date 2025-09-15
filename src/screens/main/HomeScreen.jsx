@@ -53,11 +53,11 @@ const EquipmentCard = ({ item, colors, onPress }) => (
       
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
-          <View 
+          <View
             className="w-2 h-2 rounded-full mr-2"
             style={{ backgroundColor: item.available ? '#10B981' : '#F59E0B' }}
           />
-          <Text 
+          <Text
             className="text-xs"
             style={{ color: item.available ? '#10B981' : '#F59E0B' }}
           >
@@ -65,9 +65,37 @@ const EquipmentCard = ({ item, colors, onPress }) => (
           </Text>
         </View>
       </View>
-      
-      <Text 
-        className="text-xs mt-1" 
+
+      {!item.available && item.borrower && (
+        <View className="mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+          <Text
+            className="text-xs"
+            style={{ color: colors.textSecondary }}
+          >
+            Posudio/la: <Text style={{ color: colors.text, fontWeight: '500' }}>{item.borrower.name}</Text>
+          </Text>
+          <Text
+            className="text-xs mt-1"
+            style={{ color: colors.textSecondary }}
+          >
+            {item.borrower.role === 'student' ? 'Student' : 'Nastavnik'}
+          </Text>
+        </View>
+      )}
+
+      {item.owner && (
+        <View className="mt-2 pt-2" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+          <Text
+            className="text-xs"
+            style={{ color: colors.textSecondary }}
+          >
+            Vlasnik: <Text style={{ color: colors.text, fontWeight: '500' }}>{item.owner.name}</Text>
+          </Text>
+        </View>
+      )}
+
+      <Text
+        className="text-xs mt-1"
         style={{ color: colors.textSecondary }}
       >
         {item.location}

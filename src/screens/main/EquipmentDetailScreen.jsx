@@ -262,27 +262,58 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
         </View>
 
         <View className="p-4">
-          <View className="flex-row items-center justify-between mb-2">
-            <Text className="text-2xl font-bold" style={{ color: colors.text }}>
-              {equipment.name}
-            </Text>
-            <View className="flex-row items-center">
-              <View 
-                className="w-3 h-3 rounded-full mr-2"
-                style={{ backgroundColor: equipment.available ? colors.success : colors.warning }}
-              />
-              <Text 
-                className="text-sm font-medium"
-                style={{ color: equipment.available ? colors.success : colors.warning }}
-              >
-                {equipment.available ? 'Dostupno' : 'Rezervirano'}
-              </Text>
-            </View>
-          </View>
+          <Text className="text-2xl font-bold mb-2" style={{ color: colors.text }}>
+            {equipment.name}
+          </Text>
 
           <Text className="text-base mb-4" style={{ color: colors.textSecondary }}>
             {equipment.category}
           </Text>
+
+          <View className="flex-row items-center mb-6">
+            <View
+              className="w-3 h-3 rounded-full mr-2"
+              style={{ backgroundColor: equipment.available ? colors.success : colors.warning }}
+            />
+            <Text
+              className="text-sm font-medium"
+              style={{ color: equipment.available ? colors.success : colors.warning }}
+            >
+              {equipment.available ? 'Dostupno' : 'Rezervirano'}
+            </Text>
+          </View>
+
+          {!equipment.available && equipment.borrower && (
+            <View className="mb-6 p-4 rounded-lg" style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+              <Text className="text-lg font-semibold mb-3" style={{ color: colors.text }}>
+                Trenutno posuđeno
+              </Text>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1">
+                  <Text className="text-base font-medium mb-1" style={{ color: colors.text }}>
+                    {equipment.borrower.name}
+                  </Text>
+                  <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>
+                    {equipment.borrower.role === 'student' ? 'Student' : 'Nastavnik'} • {equipment.borrower.email}
+                  </Text>
+                  <Text className="text-sm" style={{ color: colors.warning }}>
+                    Povrat do: {new Date(equipment.borrower.borrowedUntil).toLocaleDateString('hr-HR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric'
+                    })}
+                  </Text>
+                </View>
+                <View className="ml-4">
+                  <Ionicons
+                    name={equipment.borrower.role === 'student' ? 'school' : 'person'}
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
 
           <View className="mb-6">
             <Text className="text-lg font-semibold mb-2" style={{ color: colors.text }}>
@@ -304,6 +335,28 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
               </Text>
             </View>
           </View>
+
+          {equipment.owner && (
+            <View className="mb-6">
+              <View className="flex-row items-center mb-4">
+                <View className="w-12 h-12 rounded-full items-center justify-center mr-3" style={{ backgroundColor: colors.surface }}>
+                  <Ionicons
+                    name={equipment.owner.role === 'student' ? 'school' : 'person'}
+                    size={24}
+                    color={colors.primary}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-lg font-semibold" style={{ color: colors.text }}>
+                    {equipment.owner.name}
+                  </Text>
+                  <Text className="text-sm" style={{ color: colors.textSecondary }}>
+                    {equipment.owner.role === 'student' ? 'Student' : 'Nastavnik'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           <View className="mb-6">
             <Text className="text-lg font-semibold mb-3" style={{ color: colors.text }}>
@@ -357,15 +410,65 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
 
       {equipment.available && (
         <View className="p-4" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-          <TouchableOpacity
-            onPress={handleBookEquipment}
-            className="py-4 rounded-xl"
-            style={{ backgroundColor: colors.primary }}
-          >
-            <Text className="text-center text-lg font-bold text-white">
-              Rezerviraj opremu
-            </Text>
-          </TouchableOpacity>
+          {equipment.owner ? (
+            <View>
+              <View className="flex-row mb-4">
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert('Poziv', 'Funkcija poziva bit će dodana uskoro.');
+                  }}
+                  className="flex-1 mr-2 py-3 rounded-xl items-center"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Ionicons name="call" size={20} color={colors.text} />
+                  <Text className="text-sm mt-1" style={{ color: colors.text }}>
+                    Poziv
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    Alert.alert('E-pošta', `Kontakt: ${equipment.owner.email}`);
+                  }}
+                  className="flex-1 mx-1 py-3 rounded-xl items-center"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Ionicons name="mail" size={20} color={colors.text} />
+                  <Text className="text-sm mt-1" style={{ color: colors.text }}>
+                    E-pošta
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    // Navigate to the Message screen via the Messages tab to ensure proper navigation stack
+                    navigation.navigate('MainTabs', { screen: 'Messages' });
+                    setTimeout(() => {
+                      navigation.navigate('Message', {
+                        owner: equipment.owner,
+                        equipment: equipment
+                      });
+                    }, 100);
+                  }}
+                  className="flex-1 ml-2 py-3 rounded-xl items-center"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Ionicons name="chatbubble" size={20} color={colors.text} />
+                  <Text className="text-sm mt-1" style={{ color: colors.text }}>
+                    Poruka
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={handleBookEquipment}
+              className="py-4 rounded-xl"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text className="text-center text-lg font-bold text-white">
+                Rezerviraj opremu
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 

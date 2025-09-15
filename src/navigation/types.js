@@ -3,6 +3,5 @@
 
 // Screen names for reference:
 // Auth Stack: Login
-// Student Tabs: Home, Search, Bookings, Profile  
-// Staff Tabs: Dashboard, Equipment, Students, Profile
-// Root Stack: Auth, StudentApp, StaffApp
+// Main Tabs: Home, Search, Bookings, Messages, Profile
+// Root Stack: Auth, MainApp

@@ -23,26 +23,11 @@ const LoginScreen = ({ navigation, onAuthChange }) => {
 
 
   /**
-   * Development mode: Login as student
+   * Development mode: Login
    */
-  const handleDevStudentLogin = async () => {
+  const handleDevLogin = async () => {
     try {
-      await authService.loginDevMode('student');
-      // Trigger auth state check in App.jsx which will update navigation
-      if (onAuthChange) {
-        onAuthChange();
-      }
-    } catch (error) {
-      Alert.alert('Greška', 'Development login failed');
-    }
-  };
-
-  /**
-   * Development mode: Login as staff/professor
-   */
-  const handleDevStaffLogin = async () => {
-    try {
-      await authService.loginDevMode('staff');
+      await authService.loginDevMode();
       // Trigger auth state check in App.jsx which will update navigation
       if (onAuthChange) {
         onAuthChange();
@@ -68,20 +53,11 @@ const LoginScreen = ({ navigation, onAuthChange }) => {
           {/* Authentication section */}
           <View style={styles.authSection}>
             <TouchableOpacity
-              style={[styles.studentButton, { backgroundColor: '#3B82F6' }]}
-              onPress={handleDevStudentLogin}
+              style={[styles.loginButton, { backgroundColor: '#3B82F6' }]}
+              onPress={handleDevLogin}
             >
               <Text style={styles.buttonText}>
-                Student
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.staffButton, { backgroundColor: '#6B7280' }]}
-              onPress={handleDevStaffLogin}
-            >
-              <Text style={styles.buttonText}>
-                Osoblje
+                Prijavi se
               </Text>
             </TouchableOpacity>
           </View>
@@ -115,15 +91,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
-  studentButton: {
-    width: '80%',
-    paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
-  staffButton: {
+  loginButton: {
     width: '80%',
     paddingVertical: 15,
     borderRadius: 25,

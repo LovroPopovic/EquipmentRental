@@ -4,13 +4,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from '../context/ThemeContext';
 import { useColors } from '../hooks/useColors';
 import AuthNavigator from './AuthNavigator';
-import StudentNavigator from './StudentNavigator';
-import StaffNavigator from './StaffNavigator';
+import MainNavigator from './MainNavigator';
 
 const Stack = createNativeStackNavigator();
 
 
-const AppNavigator = ({ isAuthenticated, userRole, onAuthChange }) => {
+const AppNavigator = ({ isAuthenticated, onAuthChange }) => {
   const { isDark } = useTheme();
   const colors = useColors();
 
@@ -51,10 +50,8 @@ const AppNavigator = ({ isAuthenticated, userRole, onAuthChange }) => {
           <Stack.Screen name="Auth">
             {(props) => <AuthNavigator {...props} onAuthChange={onAuthChange} />}
           </Stack.Screen>
-        ) : userRole === 'student' ? (
-          <Stack.Screen name="StudentApp" component={StudentNavigator} />
         ) : (
-          <Stack.Screen name="StaffApp" component={StaffNavigator} />
+          <Stack.Screen name="MainApp" component={MainNavigator} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

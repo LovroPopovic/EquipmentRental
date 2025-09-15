@@ -30,18 +30,17 @@ const JWKS_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 class AuthService {
   /**
    * Development mode: Login with mock user data
-   * @param {string} role - 'student' or 'staff'
    * @returns {Promise<any>} Mock authentication result
    */
-  async loginDevMode(role) {
+  async loginDevMode() {
     try {
       const mockUserInfo = {
-        aaiUniqueId: `dev_${role}_${Date.now()}`,
-        email: `${role}@apu.hr`,
-        firstName: role === 'student' ? 'Ana' : 'Marko',
-        lastName: role === 'student' ? 'Studenta' : 'Profesor',
-        displayName: role === 'student' ? 'Ana Studenta' : 'Marko Profesor',
-        rawRoles: role === 'student' ? ['student'] : ['djelatnik', 'nastavnik'],
+        aaiUniqueId: `dev_user_${Date.now()}`,
+        email: 'user@apu.hr',
+        firstName: 'Ana',
+        lastName: 'Korisnik',
+        displayName: 'Ana Korisnik',
+        rawRoles: ['user'],
       };
 
       const mockAuthResult = {
@@ -402,6 +401,28 @@ class AuthService {
     await Keychain.resetGenericPassword({ service: ID_TOKEN_KEY });
     await AsyncStorage.removeItem(USER_DATA_KEY);
     await AsyncStorage.removeItem(JWKS_CACHE_KEY);
+  }
+
+  /**
+   * General logout method that handles both AAI and dev mode logout
+   */
+  async logout() {
+    try {
+      // Check if this is a dev mode session by looking at the token
+      const tokens = await this.getTokens();
+
+      if (tokens.accessToken && tokens.accessToken.startsWith('dev_access_token_')) {
+        // Development mode logout - just clear data
+        await this.clearAuthData();
+      } else {
+        // Production AAI logout
+        await this.logoutAai();
+      }
+    } catch (error) {
+      // If there's any error, still clear the auth data to ensure logout
+      await this.clearAuthData();
+      throw error;
+    }
   }
 }
 
