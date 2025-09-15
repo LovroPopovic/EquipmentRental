@@ -14,7 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.choksa.EquipmentRentalApp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,10 +26,43 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.choksa.EquipmentRentalApp"
+      "package": "com.choksa.EquipmentRentalApp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "apuoprema"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      },
+      "aaiAuthConfig": {
+        "clientId": "YOUR_AAI_CLIENT_ID",
+        "issuer": "https://login.aaiedu.hr"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "./plugins/withAppAuth.js",
+        {
+          "appAuthRedirectScheme": "apuoprema"
+        }
+      ]
+    ]
   }
 }

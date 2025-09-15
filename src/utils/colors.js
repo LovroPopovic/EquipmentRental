@@ -29,6 +29,4 @@ export const colors = {
     error: '#EF4444',
     info: '#06B6D4',
   },
-} as const;
-
-export type ColorScheme = typeof colors.light | typeof colors.dark;
+};

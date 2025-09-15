@@ -1,138 +1,405 @@
-# Projektna Dokumentacija: Mobilna Aplikacija za Iznajmljivanje Opreme (APU)
+# APU Oprema - Faza 1.4: Implementacija AAI@EduHr Autentifikacije (Login Screen Integration)
 
-## 1. Sažetak Projekta
+**Datum:** 21. srpnja 2025.  
+**Trenutni Status:** AAI@EduHr resurs odobren i aktivan. Frontend Faza 1.1 kompletirana (LoginScreen spreman), Faza 1.2 (UI s mock podacima) u tijeku.
 
-Ovaj dokument detaljno opisuje plan razvoja mobilne aplikacije namijenjene **Akademiji primijenjenih umjetnosti** s primarnim ciljem digitalizacije i optimizacije procesa iznajmljivanja tehničke opreme studentima. Aplikacija je konceptualizirana kao dio završnog rada te je identificiran značajan potencijal za njenu implementaciju i daljnji razvoj unutar fakultetskog okruženja.
+## 🎯 Cilj ove faze
 
-Glavni cilj aplikacije je osigurati transparentan i učinkovit sustav za rezervaciju, praćenje dostupnosti i lokacije opreme, te unaprjeđenje komunikacije između studenata i osoblja zaduženog za opremu. Vizualni identitet aplikacije temelji se na suvremenom dizajnu s podrškom za tamni i svijetli način rada, osiguravajući optimalno korisničko iskustvo u različitim uvjetima osvjetljenja.
+Potpuno integrirati AAI@EduHr autentifikaciju u postojeći `LoginScreen`, omogućiti stvarnu prijavu korisnika putem AAI@EduHr sustava, te na temelju dobivene uloge (student/osoblje) **ispisati ulogu na ekranu** (`Student` / `Professor`) ili prikazati poruku o neuspjeloj prijavi.
 
-## 2. Opseg i Detaljne Funkcionalnosti
+**Napomena:** Direktno "ispisivanje uloge na ekran" je privremena mjera za brzu validaciju točnosti podataka. U kasnijim fazama (kao što je planirano), ovo će se zamijeniti stvarnim preusmjeravanjem na odgovarajuće sučelje (`StudentNavigator` ili `StaffNavigator`). Trenutni fokus je na verifikaciji AAI flowa.
 
-Aplikacija je striktno podijeljena na dva glavna korisnička sučelja, prilagođena specifičnim ulogama i potrebama:
+## I. Priprema i Validacija AAI@EduHr Konfiguracije
 
-### 2.1. Studentsko sučelje (Korisnici: Studenti)
+Prije bilo kakve izmjene koda, ključno je potvrditi da su svi AAI@EduHr parametri točni i ažurni.
 
-Ovo sučelje namijenjeno je studentima koji unajmljuju opremu.
+### I.1. Potvrda `authConfig.ts` parametara
 
-*   **Autentifikacija:**
-    *   **Login:** Omogućen putem unaprijed definiranih sveučilišnih računa, koristeći postojeću infrastrukturu **ISVU API-ja** odnosno **AAI@EduHr sustava**. Proces dizajna logina bit će korigiran kako bi se integrirao s ovim vanjskim sustavom, osiguravajući glatko iskustvo prijave.
-*   **Pregled i Pretraga Opreme:**
-    *   **Grid Listing Opreme:** Vizualni prikaz opreme u grid formatu, omogućavajući studentima brz pregled dostupnih predmeta.
-    *   **Filteri i Tražilica:** Robusne opcije za filtriranje opreme po kategorijama, statusu ili drugim relevantnim kriterijima, te funkcionalna tražilica za pronalaženje specifičnih predmeta.
-*   **Pojedinačni Prikaz Proizvoda (Single Product View):**
-    *   **Galerija Slika:** Mala galerija fotografija predmeta za detaljan vizualni pregled.
-    *   **Meta Podaci i Opis:** Prikaz svih relevantnih informacija o proizvodu (specifikacije, stanje, itd.).
-    *   **Kalendar i Opcije Rezerviranja:** Integrirani modul kalendara koji jasno prikazuje dostupnost opreme.
-    *   **Opcija Vezane Opreme:** Mogućnost dodavanja preporučenih ili obveznih povezanih predmeta prilikom rezervacije (npr. objektiv uz fotoaparat, stativ uz kameru).
-*   **Korisnici unutar sustava (Pregled):**
-    *   Aplikacija prepoznaje uloge studenata, administratora (asistenti, demonstratori, nastavnici) što utječe na vidljivost i dostupnost funkcija.
-*   **Komunikacija (Planirano za buduće faze):**
-    *   **Chat Modul:** Potencijalna integracija chat funkcionalnosti za izravnu komunikaciju između studenta i nastavnika, te studenta i studenta. **Nije obvezno u prvoj fazi (MVP).**
-*   **Kalendarski Modul za Rezervacije (Detaljno):**
-    *   **Mod 1: Ručni Odabir:** Student može samostalno odabrati i dan preuzimanja i dan vraćanja opreme.
-    *   **Mod 2: Automatsko Vraćanje:** Student odabire samo dan preuzimanja, a sustav automatski postavlja termin vraćanja prema definiranim pravilima (npr. fiksno trajanje najma).
-*   **Povratne Informacije o Opremi:**
-    *   **Textbox za Feedback:** Mogućnost ostavljanja tekstualnih bilješki ili povratnih informacija o stanju i iskustvu korištenja opreme.
+*   **Zadatak:** Verificirati da `src/services/authConfig.ts` sadrži točne i odobrene parametre iz AAI@EduHr Registra Resursa.
+*   **Akcija:**
+    1.  Otvorite `src/services/authConfig.ts`.
+    2.  Potvrdite da `clientId` **TOČNO** odgovara Client ID-u s Registra resursa (`YOUR_AAI_CLIENT_ID`).
+    3.  Potvrdite da `redirectUrl` **TOČNO** odgovara onome što je upisano u Registru resursa (`apuoprema://oauth/callback`).
+    4.  Potvrdite da `scopes` lista **TOČNO** odgovara onima koje ste odabrali i koji su odobreni (`openid`, `profile`, `email`, `hrEduPersonRole`).
+    5.  Preporučuje se da **svježe** provjerite sve OIDC endpoint URL-ove (`issuer`, `authorizationEndpoint`, `tokenEndpoint`, `revocationEndpoint`) direktno s AAI@EduHr `.well-known` konfiguracijskog dokumenta: `https://login.aaiedu.hr/cas/oidc/.well-known/openid-configuration`. Ovi URL-ovi su dinamički i uvijek je najbolje uzeti najaktualniju verziju.
+        *   Ako se razlikuju od onih u `authConfig.ts`, **ažurirajte ih**.
 
-### 2.2. Sučelje za osoblje (Korisnici: Asistenti, Demonstratori, Nastavnici, Administratori)
+### I.2. Verifikacija `app.json` Schema konfiguracije
 
-Ovo sučelje namijenjeno je osoblju zaduženom za iznajmljivanje i upravljanje opremom.
+*   **Zadatak:** Osigurati da je aplikacija ispravno konfigurirana za deep linking.
+*   **Akcija:** Otvorite `app.json` i potvrdite prisutnost i točnost linije `"scheme": "apuoprema",` unutar `"expo": {}` objekta. Ovo je ključno da se aplikacija otvori nakon AAI@EduHr preusmjeravanja.
 
-*   **Listing Studenata i Komunikacija:**
-    *   Pregled popisa studenata s osnovnim podacima.
-    *   (Planirano za buduće faze) Mogućnost iniciranja komunikacije (chat?) sa studentima.
-*   **Listing Opreme s Filterima i Pretragom:**
-    *   Detaljan pregled cjelokupne opreme s naprednim opcijama filtriranja i pretraživanja za osoblje.
-*   **Povijest Opreme:**
-    *   Praćenje detaljne povijesti zaduženja svakog komada opreme, uključujući podatke o tome tko je posudio opremu te od kada do kada.
-*   **Sučelje za Unos/Uređivanje Opreme:**
-    *   Specifično sučelje za unos novih predmeta opreme u inventar, te za uređivanje postojećih podataka. Bit će definirana sva polja potrebna za evidenciju (naziv, opis, kategorija, serijski broj, datum nabave, lokacija, status, itd.).
-*   **QR Code / Barcode Reader:**
-    *   Integrirana funkcionalnost skeniranja QR kodova ili bar kodova. Koristit će se za precizno praćenje lokacije i trenutnog korisnika svakog komada opreme.
-*   **Bilješke o Opremi:**
-    *   Tekstualni okvir za bilješke i komentare o opremi, slično feedbacku studenata, ali za interne potrebe osoblja (npr. servisne bilješke, oštećenja, specifične upute).
+## II. Povezivanje `LoginScreen.tsx` s AAI@EduHr Autentifikacijom
 
-## 3. Tehnički Plan
+Ovdje ćemo modificirati postojeći `LoginScreen` da koristi `AuthService` za AAI@EduHr prijavu.
 
-Razvoj aplikacije bazirat će se na odabranom skupu modernih i robustnih tehnologija kako bi se osigurala visoka kvaliteta, skalabilnost i održivost projekta.
+### II.1. Izmjena `LoginScreen.tsx` - Uklanjanje lokalne prijave i integracija AAI buttona
 
-### 3.1. Predloženi tehnološki skup (Tech Stack)
+*   **Zadatak:** Ažurirati `LoginScreen` da podržava samo AAI@EduHr prijavu. Ukloniti inpute za korisničko ime i lozinku ako se ISVU login direktno radi preko AAI-ja.
+*   **Datoteka:** `src/screens/auth/LoginScreen.tsx`
+*   **Detalji implementacije:**
 
-*   **Mobilna aplikacija (Frontend):**
-    *   **Platforma:** React Native (odabran zbog cross-platform mogućnosti i performansi bliskih nativnim).
-    *   **Jezik:** TypeScript (za poboljšanu sigurnost koda, tipizaciju i lakše održavanje).
-    *   **UI Stil:** NativeWind (implementacija Tailwind CSS-a u React Nativeu za brzi i konzistentni UI razvoj, usklađen s Figma dizajnom).
-    *   **Navigacija:** React Navigation v6 (standard za robusnu navigaciju u React Native aplikacijama).
-    *   **Upravljanje stanjem:** Zustand (lagano rješenje za globalno stanje) / React Toolkit Query (za optimizirano dohvaćanje i keširanje podataka s API-ja u budućim fazama).
-*   **Backend (API):**
-    *   **Jezik/Runtime:** Node.js (izabran zbog performansi, asinkronog rada i popularnosti).
-    *   **Framework:** Fastify (alternativno Express.js) - za izgradnju brzog i skalabilnog RESTful API-ja.
-    *   **Jezik:** TypeScript (za dosljednost s frontendom i bolju organizaciju koda).
-    *   **Real-time komunikacija (za chat):** Socket.io (za dvosmjernu komunikaciju u stvarnom vremenu, planirano za buduće faze).
-*   **Baza podataka:**
-    *   **Sustav:** PostgreSQL (relacijska baza podataka poznata po robusnosti, skalabilnosti i integritetu podataka, idealna za kompleksne odnose entiteta poput opreme i rezervacija).
-    *   **ORM (Object-Relational Mapper):** Prisma (suvremeni ORM koji nudi izvanrednu podršku za TypeScript, olakšavajući interakciju s bazom podataka).
-*   **Skladištenje datoteka:**
-    *   AWS S3 ili Cloudinary (za sigurno i skalabilno pohranjivanje slika opreme i drugih medijskih datoteka).
+    ```typescript
+    import React from 'react';
+    import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, ImageBackground } from 'react-native';
+    import { useTheme } from '../../hooks/useColors'; // Vaš custom hook za boje
+    import { authService } from '../../services/AuthService'; // Vaš AuthService
+    import { CommonActions, useNavigation } from '@react-navigation/native'; // Navigacija
+    import type { RootStackScreenProps } from '../../navigation/types'; // Vaši navigacijski tipovi
+    import Svg, { Path } from 'react-native-svg'; // Za SVG logo
 
-#### 3.2. Arhitektura sustava
+    // Typizacija propova za ekran (prilagodite prema vašem RootStackParamList)
+    type Props = RootStackScreenProps<'Login'>;
 
-Sustav će biti arhitektonski podijeljen na tri glavna sloja, osiguravajući jasnu razdvojenost odgovornosti i modularnost:
+    // Komponenta za APU Logo (koristiće boje teme)
+    interface ApuLogoProps {
+      size?: number;
+      color: string;
+    }
+    const ApuLogo: React.FC<ApuLogoProps> = ({ size = 60, color }) => ( // Povećao default size
+      <Svg width={size} height={size * 0.47} viewBox="0 0 64 30">
+        <Path fillRule="evenodd" clipRule="evenodd"
+              d="M10.931 13.715 5.534.172 0 13.715h10.931Z" fill={color} />
+        <Path d="M26.477 25.74h-4.501V30h4.5v-4.26Z" fill={color} />
+        <Path fillRule="evenodd" clipRule="evenodd"
+              d="M63.603 20.942a9.059 9.059 0 0 1-18.114 0V0h18.114v20.942ZM29.631.172a6.773 6.773 0 0 1 6.772 6.772 6.773 6.773 0 0 1-6.772 6.77l-3.155.001V.173h3.155Z"
+              fill={color} />
+      </Svg>
+    );
 
-1.  **Korisničko sučelje (Frontend - React Native):** Odgovorno za prezentaciju podataka i interakciju s korisnikom na iOS i Android platformama. Komunicirat će isključivo s API slojem.
-2.  **API Sloj (Backend - Node.js/Fastify):** Središnji sloj koji sadrži poslovnu logiku aplikacije. On će primati zahtjeve s mobilne aplikacije, obrađivati ih (npr. provjera valjanosti rezervacije) i komunicirati sa slojem podataka.
-3.  **Sloj podataka (Database - PostgreSQL + Prisma):** Odgovoran za trajno pohranjivanje svih informacija relevantnih za aplikaciju, uključujući detalje o korisnicima, opremi, rezervacijama, komunikaciji i bilješkama.
+    const LoginScreen: React.FC<Props> = () => {
+      const { colors, isDark } = useTheme(); // Dohvat boja i statusa teme
+      const [loading, setLoading] = React.useState(false);
+      const [loggedInRole, setLoggedInRole] = React.useState<string | null>(null); // Za privremeni ispis uloge
+      const navigation = useNavigation();
 
-#### 3.3. Autentifikacija putem AAI@EduHr (Detaljno)
+      /**
+       * Pokreće proces AAI@EduHr prijave.
+       * Obrađuje uspjeh, pogreške i navigaciju/ispis uloge.
+       */
+      const handleAaiLogin = async () => {
+        setLoading(true); // Aktiviraj loading indikator
+        setLoggedInRole(null); // Resetiraj prethodni ispis uloge
 
-Kao odgovor na zahtjev za korištenjem postojećih sveučilišnih računa, planira se dublja integracija s AAI@EduHr sustavom.
+        try {
+          // Pozivanje AAI@EduHr autentifikacijskog servisa
+          const authResult = await authService.loginWithAai();
 
-*   **Povezanost:** AAI@EduHr sustav (koji održava SRCE) služit će kao primarni i jedini autoritativni izvor za autentifikaciju korisnika. Nakon uspješne autentifikacije putem AAI@EduHr, aplikacija će dobiti potvrdu identiteta korisnika i njegove osnovne atribute (poput ISVU ID-a, imena, e-maila, uloge). Svi ostali specifični podaci vezani za funkcioniranje aplikacije (poput popisa rezervirane opreme, korisničkih preferencija, chat povijesti) bit će pohranjeni i upravljani unutar vlastite PostgreSQL baze.
-*   **Predloženi Protokol:** Za mobilnu aplikaciju, **OpenID Connect (OIDC)** je preferirani protokol zbog svoje modernosti, sigurnosti i prilagođenosti mobilnim platformama. OIDC omogućuje dobivanje JWT (JSON Web Tokena) koji se može sigurno koristiti za daljnju autorizaciju API poziva unutar aplikacije.
-*   **Potrebni koraci za integraciju:** Obuhvaćaju registraciju aplikacije kao "Servisnog provajdera" unutar AAI@EduHr infrastrukture (putem SRCE-a), što uključuje dobivanje Client ID-a i konfiguraciju specifičnih Redirect URI-ja za mobilnu aplikaciju.
+          if (authResult) {
+            // Dohvati parsed user info iz pohrane
+            const userInfo = await authService.getUserInfo();
 
-## 4. Vizualni Dizajn
+            if (userInfo) {
+              // Privremeni ispis uloge na ekran (za testiranje)
+              setLoggedInRole(userInfo.rawRoles.join(', '));
+              
+              // Ovdje bi se normalno radilo preusmjeravanje, ali za testiranje AAI flowa samo ispisujemo ulogu
+              // Primjer navigacije za buduće faze:
+              // const isStudent = userInfo.rawRoles.includes('student');
+              // const isStaff = userInfo.rawRoles.some(role => ['djelatnik', 'nastavnik', 'admin'].includes(role));
 
-Detaljan i sveobuhvatan vizualni dizajn aplikacije, koji uključuje kompletan set ekrana i interakcija za oba sučelja (studentsko i osoblje), s podrškom za tamni i svijetli način rada, dostupan je na priloženim Figma linkovima. Dizajn osigurava dosljednost i visoku razinu korisničkog iskustva.
+              // if (isStudent && !isStaff) {
+              //   navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'StudentApp' as never }] }));
+              // } else if (isStaff) {
+              //   navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'StaffApp' as never }] }));
+              // } else {
+              //   Alert.alert('Uloga neprepoznata', 'Vaša uloga nije prepoznata. Molimo kontaktirajte administratora.');
+              //   await authService.logoutAai();
+              // }
+            } else {
+              // Iako je authResult bio uspješan, userInfo nije dohvaćen - anomalija
+              throw new Error('User information could not be retrieved after successful authentication.');
+            }
+          }
+        } catch (error: any) {
+          console.error('AAI Login Error:', error.message, error.code, error.data);
+          // Standardizirane poruke o grešci
+          let errorMessage = 'Prijava neuspješna. Pokušajte ponovno.';
+          if (error.code === 'error.browser_returned_error') { // Npr. korisnik zatvorio preglednik
+            errorMessage = 'Prijava je otkazana ili neuspješna u pregledniku.';
+          } else if (error.message.includes('NoAccessToken')) { // Primjer specifične greške
+            errorMessage = 'Autentifikacija nije vratila pristupni token.';
+          } else if (error.message.includes('Invalid or unreadable ID token')) {
+            errorMessage = 'Greška s korisničkim podacima nakon prijave.';
+          }
+          Alert.alert('Greška pri prijavi', errorMessage);
+          setLoggedInRole('GREŠKA: ' + errorMessage); // Ispis greške za debug
+        } finally {
+          setLoading(false); // Deaktiviraj loading indikator
+        }
+      };
 
-*   **Figma linkovi:**
-    *   **Glavni dizajn:** https://www.figma.com/file/oFoqihvH5mRmqcoH97yDXm/Jan-Pavleti%C4%87-%E2%80%93-Iznajmi-app?type=design&node-id=484%3A510&mode=design&t=ca94szD0lXD5pYaC-1
+      return (
+        <ImageBackground
+          source={require('../../assets/images/APURI-FOTKA-ZGRADA.jpg')} // Provjerite putanju slike
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        >
+          <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.85)' }]}>
+            <View style={styles.contentContainer}>
+              {/* APU Logo */}
+              <View style={styles.logoContainer}>
+                <ApuLogo color={colors.text} size={100} /> {/* Veličina loga */}
+              </View>
 
-## 5. Trenutni Status i Plan Razvoja
+              {/* Autentifikacijski dio */}
+              <View style={styles.authSection}>
+                <Text style={[styles.loginPrompt, { color: colors.text }]}>
+                  Prijavite se putem AAI@EduHr računa
+                </Text>
 
-Trenutno se projekt nalazi u **Fazi 1: Čisti Frontend (100% Mock Podaci)**.
+                <TouchableOpacity
+                  style={[styles.aaiLoginButton, { backgroundColor: colors.primary }]}
+                  onPress={handleAaiLogin}
+                  disabled={loading} // Onemogući gumb dok je loading aktivan
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.text} />
+                  ) : (
+                    <Text style={styles.aaiLoginButtonText}>
+                      Prijava
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-### 5.1. Dosadašnji napredak
+                {/* Sekcija za ispis uloge nakon prijave */}
+                {loggedInRole && (
+                  <Text style={[styles.roleDisplay, { color: colors.text }]}>
+                    Uloga: {loggedInRole}
+                  </Text>
+                )}
 
-Postavili smo snažan temelj za daljnji razvoj. Svi ključni koraci inicijalne konfiguracije su uspješno završeni:
+                {/* Opcija za "Prijava za goste" - prema Figma dizajnu */}
+                <TouchableOpacity
+                  style={[styles.guestLoginButton, { borderColor: colors.text }]}
+                  onPress={() => Alert.alert('Gost Prijava', 'Funkcionalnost prijave za goste nije implementirana u ovoj fazi.')}
+                >
+                  <View style={styles.guestButtonContent}>
+                    <Text style={[styles.guestLoginButtonText, { color: colors.text }]}>
+                      Prijava za goste
+                    </Text>
+                    <Text style={[styles.guestLoginButtonText, { color: colors.text }]}>
+                      →
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+      );
+    };
 
-*   ✅ **Inicijalizacija Projekta:** Expo React Native projekt je uspješno inicijaliziran s podrškom za TypeScript.
-*   ✅ **Instalacija Ovisnosti:** Sve osnovne ovisnosti potrebne za frontend razvoj su instalirane, uključujući React Navigation (za navigaciju) i NativeWind/TailwindCSS (za stiliziranje).
-*   ✅ **Struktura Direktorija:** Cjelokupna modularna struktura direktorija unutar `src/` mape je kreirana i organizirana prema najboljim praksama, s jasno definiranim modulima za komponente, ekrane, navigaciju, podatke, kontekst, hookove i pomoćne funkcije. Postojanje i ispravnost strukture je provjerena.
-*   ✅ **Konfiguracija Stiliziranja:** Tailwind CSS konfiguracija je ispravno postavljena i optimizirana za kompatibilnost s NativeWind-om, osiguravajući učinkovito stiliziranje korisničkog sučelja.
-*   ✅ **Poboljšana TypeScript Podrška:** Dodatna TypeScript podrška je poboljšana integracijom `@types/react-native`, što osigurava bolju tipizaciju i robustnost koda.
+    const styles = StyleSheet.create({
+      backgroundImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
+      },
+      overlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+      },
+      contentContainer: {
+        width: '100%',
+        maxWidth: 400, // Ograničenje širine za bolji prikaz na većim ekranima
+        alignItems: 'center',
+      },
+      logoContainer: {
+        marginBottom: 40,
+        // Dodatni stilovi za pozicioniranje loga ako treba (npr. margin-top)
+      },
+      authSection: {
+        width: '100%',
+        alignItems: 'center',
+      },
+      loginPrompt: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center',
+      },
+      aaiLoginButton: {
+        width: '80%',
+        paddingVertical: 15,
+        borderRadius: 25, // Oblik "pilule"
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 15,
+      },
+      aaiLoginButtonText: {
+        color: '#FFFFFF', // Tekst bijel na crvenoj pozadini
+        fontSize: 18,
+        fontWeight: 'bold',
+      },
+      roleDisplay: {
+        fontSize: 16,
+        marginTop: 10,
+        fontWeight: 'bold',
+      },
+      guestLoginButton: {
+        width: '80%',
+        paddingVertical: 10,
+        borderRadius: 25, // Oblik "pilule"
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 20,
+      },
+      guestButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      guestLoginButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+      },
+    });
 
-### 5.2. Sljedeći koraci (Faza 1.1 - UI Implementacija)
+    export default LoginScreen;
+    ```
 
-Nakon što su temelji postavljeni, fokus je sada na implementaciji prvih vizualnih komponenti i ekrana:
+### II.2. Revizija `AuthService.ts` za specifične AAI atribute
 
-*   Implementacija **Tamnog/Svijetlog načina rada** prema Figma dizajnu.
-*   Izgradnja kompletnog **Login Ekrana** s mock logikom (samo za vizualni prikaz i simulaciju prelaska na Home ekran).
-*   Razvoj `EquipmentCard` komponente.
-*   Implementacija **Home Ekrana** s prikazom opreme u gridu koristeći mock podatke, uključujući UI za pretraživanje i filtriranje.
-*   **Cilj:** Kompletno vizualno i interaktivno sučelje koje simulira funkcionalnost s lažnim podacima.
+*   **Zadatak:** Ažurirati `decodeIdToken` metodu da ispravno dohvaća atribute koje AAI@EduHr vraća u `idTokenu`, posebno `hrEduPersonRole` i `hrEduPersonUniqueID`.
+*   **Datoteka:** `src/services/AuthService.ts`
+*   **Detalji implementacije:**
 
-### 5.3. Faze razvoja koje slijede
+    ```typescript
+    import { authorize, refresh, revoke, AuthResult } from 'react-native-app-auth';
+    import * as Keychain from 'react-native-keychain';
+    import AsyncStorage from '@react-native-async-storage/async-storage';
+    import { aaiAuthConfig } from './authConfig';
+    import { Buffer } from 'buffer';
 
-*   **Faza 2: Backend Temelji & Interna Autentifikacija:** Postavljanje centralnog backend sustava i baze podataka, te interna autentifikacija. Obuhvaća postavku Fastify/Node.js backend servera, definiranje detaljne Prisma schema modela za sve entitete (Korisnici, Oprema, Rezervacije, Poruke, Kategorije). Konfiguracija PostgreSQL baze podataka. Implementacija CRUD (Create, Read, Update, Delete) API endpointa za dohvat i upravljanje opremom. Implementacija **privremenog, jednostavnog (mock) sustava prijave** na backendu (npr. e-mail/lozinka) za interno testiranje i generiranje JWT tokena. Povezivanje frontend aplikacije s ovim backend API-jem, zamjenjujući mock podatke stvarnim podacima iz baze.
+    // Osigurajte Buffer polyfill na vrhu datoteke ako nije globalno dostupan
+    if (typeof Buffer === 'undefined') {
+      global.Buffer = require('buffer').Buffer;
+    }
 
-*   **Faza 3: AAI@EduHr Integracija:** Zamjena privremene autentifikacije punopravnom AAI@EduHr integracijom. Ovaj korak će se provesti nakon dobivanja potrebnih podataka od SRCE-a (Client ID, Secret, Redirect URI). Obuhvaća implementaciju OpenID Connect protokola unutar React Native aplikacije. Prilagodba backend logike za provjeru i prihvaćanje tokena dobivenih od AAI@EduHr. Mapiranje atributa AAI korisnika na interne korisničke profile u bazi.
+    // Ključevi za pohranu
+    const ACCESS_TOKEN_KEY = 'aaiAccessToken';
+    const REFRESH_TOKEN_KEY = 'aaiRefreshToken';
+    const ID_TOKEN_KEY = 'aaiIdToken';
+    const USER_DATA_KEY = 'aaiUserData';
 
-*   **Faza 4+: Buduće Faze i Unaprjeđenja:** Obuhvaćat će implementaciju funkcionalnog chat modula u stvarnom vremenu (Socket.io). Potpuna integracija QR koda / Barcode reader-a za praćenje točne lokacije i korisnika opreme. Razvoj detaljnih izvješća i prikaza povijesti korištenja opreme za osoblje. Sustav push notifikacija za podsjetnike o preuzimanju/vraćanju i isteku roka. Razvoj naprednih funkcija za administraciju opreme i korisnika.
+    // Ažurirani UserInfo interface kako bi odražavao točne atribute iz AAI@EduHr
+    export interface UserInfo {
+      aaiUniqueId: string;      // Standardni 'sub' claim (iz OIDC)
+      email: string;            // 'mail' claim iz AAI@EduHr
+      firstName: string;        // 'givenName' claim
+      lastName: string;         // 'sn' claim
+      displayName: string;      // 'displayName' ili 'cn' claim
+      rawRoles: string[];       // Npr. ["student", "djelatnik"] iz 'hrEduPersonRole' claima
+      // Dodajte ostale atribute ako ste ih odabrali i AAI@EduHr ih vraća
+      // npr. hrEduPersonAffiliation?: string;
+    }
 
-## 6. Otvorena Pitanja
+    class AuthService {
+      // ... (Ostale metode kao što su loginWithAai, refreshAaiToken, logoutAai, getTokens, getUserInfo)
+      // Te metode su već detaljno opisane u prethodnom Senior Developer Reportu.
+      // Ovdje je ključna samo izmjena decodeIdToken i mapiranje atributa.
 
-Glavno i ključno otvoreno pitanje u ovoj fazi razvoja jest precizan postupak i potrebne informacije za **registraciju mobilne aplikacije unutar AAI@EduHr sustava** u svrhu testiranja. Također, bitna je informacija o dostupnosti eventualnih **testnih okruženja** za AAI@EduHr autentifikaciju. U tu svrhu poslan je upit AAI koordinatoru Sveučilišta u Rijeci.
+      /**
+       * Pomoćna funkcija za dekodiranje ID tokena i dohvat korisničkih informacija.
+       * Ažurirano za točne AAI@EduHr atribute.
+       * @param idToken JWT string
+       * @returns {UserInfo} Dekodirani korisnički podaci
+       */
+      private decodeIdToken(idToken: string): UserInfo {
+        try {
+          const base64Url = idToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
 
----
-**Datum:** [Današnji datum, npr. 21. srpnja 2025.]
+          console.log("Dekodirani ID Token (provjerite atribute):", decoded); // VRLLO VAŽNO ZA DEBUG
+
+          // Mapirajte atribute iz dekodiranog tokena na vaš UserInfo interface
+          // Nazivi atributa (claimova) su ključni - moraju TOČNO odgovarati AAI@EduHr formatu
+          return {
+            aaiUniqueId: decoded.sub || 'unknown_sub', // Standardni OIDC subject
+            email: decoded.mail || decoded.email || 'no_email@example.com', // AAI često koristi 'mail' claim
+            firstName: decoded.givenName || '',
+            lastName: decoded.sn || '',
+            displayName: decoded.displayName || decoded.cn || 'Anonymous User',
+            // hrEduPersonRole claim se obično vraća kao string[] ili string.
+            rawRoles: Array.isArray(decoded.hrEduPersonRole)
+                      ? decoded.hrEduPersonRole
+                      : (typeof decoded.hrEduPersonRole === 'string'
+                         ? [decoded.hrEduPersonRole]
+                         : []),
+          };
+        } catch (error) {
+          console.error('Greška pri dekodiranju ID tokena:', error);
+          throw new Error('Neispravan ID token primljen ili ga nije moguće dekodirati.');
+        }
+      }
+
+      /**
+       * Pomoćna funkcija za pohranu tokena i korisničkih podataka.
+       * @param authResult Rezultat autentifikacije
+       * @param userInfo Parsirani korisnički podaci
+       */
+      private async storeAuthData(authResult: AuthResult, userInfo: UserInfo): Promise<void> {
+        await Keychain.setGenericPassword(ACCESS_TOKEN_KEY, authResult.accessToken, { service: ACCESS_TOKEN_KEY });
+        if (authResult.refreshToken) {
+          await Keychain.setGenericPassword(REFRESH_TOKEN_KEY, authResult.refreshToken, { service: REFRESH_TOKEN_KEY });
+        }
+        if (authResult.idToken) {
+          await Keychain.setGenericPassword(ID_TOKEN_KEY, authResult.idToken, { service: ID_TOKEN_KEY });
+        }
+        await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userInfo));
+      }
+
+      /**
+       * Pomoćna funkcija za brisanje svih pohranjenih tokena i podataka.
+       */
+      private async clearAuthData(): Promise<void> {
+        await Keychain.resetGenericPassword({ service: ACCESS_TOKEN_KEY });
+        await Keychain.resetGenericPassword({ service: REFRESH_TOKEN_KEY });
+        await Keychain.resetGenericPassword({ service: ID_TOKEN_KEY });
+        await AsyncStorage.removeItem(USER_DATA_KEY);
+      }
+    }
+
+    export const authService = new AuthService();
+    ```
+*   **Ključni dodatak: `console.log("Dekodirani ID Token (provjerite atribute):", decoded);`** - Ovo je *iznimno* važno. Nakon prve uspješne AAI prijave, provjerite izlaz u konzoli. Vidjet ćete točne nazive atributa (`claims`) koje AAI@EduHr vraća. To će vam omogućiti da precizno mapirate `decoded.hrEduPersonRole` (ili kako god se zove u `decoded` objektu) i ostale atribute na vaš `UserInfo` interface.
+
+## III. Testiranje Integracije
+
+Nakon implementacije, ključno je temeljito testirati.
+
+### III.1. Lokalno Pokretanje i Testiranje
+
+1.  **Pokrenite Expo Development Server:**
+    ```bash
+    npm start
+    ```
+2.  **Otvorite aplikaciju na emulatoru/uređaju:**
+    *   Kliknite na "Run on Android device/emulator" ili "Run on iOS simulator" u Expo Dev Tools.
+3.  **Testirajte AAI@EduHr prijavu:**
+    *   Kliknite na "Prijava putem AAI@EduHr" gumb na `LoginScreen.tsx`.
+    *   Trebao bi se otvoriti web preglednik na AAI@EduHr login stranici.
+    *   Prijavite se svojim AAI@EduHr korisničkim podacima.
+    *   Nakon uspješne prijave, trebali biste biti preusmjereni natrag u aplikaciju.
+    *   Ako je prijava bila uspješna, na dnu ekrana `LoginScreen` trebala bi se ispisati vaša uloga (npr. "student", "djelatnik").
+
+### III.2. Debugging savjeti
+
+*   **Prazan ekran nakon redirekcije?** Provjerite da li `apuoprema` shema radi ispravno (Expo CLI bi trebao to riješiti automatski). Ako ne, možda problem s `react-native-app-auth` konfiguracijom.
+*   **"Invalid ID token" greška?** Pažljivo provjerite `console.log("Dekodirani ID Token:", decoded);` unutar `decodeIdToken` metode. Moguće da se nazivi atributa malo razlikuju od očekivanih (`hrEduPersonRole` vs `hrEduPersonRoles` ili slično). Prilagodite mapiranje u `UserInfo` interfaceu.
+*   **"Authentication failed" / Generičke greške?** Pogledajte detaljnije logove u konzoli za `react-native-app-auth`. Provjerite sve URL-ove u `authConfig.ts` jesu li 100% točni.
+
+## IV. Sljedeći korak (Nakon potvrde ispravnog ispisa uloge)
+
+Kada ste sigurni da se uloga ispravno ispisuje, možete:
+
+1.  **Ukloniti `loggedInRole` state** i njegov prikaz s `LoginScreen.tsx`.
+2.  **Aktivirati `CommonActions.reset` navigaciju** unutar `handleAaiLogin` funkcije.
+3.  Nastaviti s razvojem ostalih UI komponenti (Faza 1.2) i paralelnim razvojem backenda (Faza 2.x).
+
+**Sretno s integracijom! Ovo je uzbudljiv korak!**

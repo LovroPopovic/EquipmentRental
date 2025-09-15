@@ -1,21 +1,16 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { RootStackParamList } from './types';
 import { useTheme } from '../context/ThemeContext';
 import { useColors } from '../hooks/useColors';
 import AuthNavigator from './AuthNavigator';
 import StudentNavigator from './StudentNavigator';
 import StaffNavigator from './StaffNavigator';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator();
 
-interface AppNavigatorProps {
-  isAuthenticated: boolean;
-  userRole: 'student' | 'staff' | null;
-}
 
-const AppNavigator: React.FC<AppNavigatorProps> = ({ isAuthenticated, userRole }) => {
+const AppNavigator = ({ isAuthenticated, userRole }) => {
   const { isDark } = useTheme();
   const colors = useColors();
 
@@ -32,19 +27,19 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ isAuthenticated, userRole }
     fonts: {
       regular: {
         fontFamily: 'System',
-        fontWeight: '400' as '400',
+        fontWeight: '400',
       },
       medium: {
         fontFamily: 'System',
-        fontWeight: '500' as '500',
+        fontWeight: '500',
       },
       bold: {
         fontFamily: 'System',
-        fontWeight: '700' as '700',
+        fontWeight: '700',
       },
       heavy: {
         fontFamily: 'System',
-        fontWeight: '900' as '900',
+        fontWeight: '900',
       },
     },
   };

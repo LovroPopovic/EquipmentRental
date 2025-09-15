@@ -3,9 +3,8 @@ import { View, Text } from 'react-native';
 import { StaffScreenProps } from '../../navigation/types';
 import { useColors } from '../../hooks/useColors';
 
-type Props = StaffScreenProps<'Dashboard'>;
 
-const DashboardScreen: React.FC<Props> = () => {
+const DashboardScreen = () => {
   const colors = useColors();
 
   return (

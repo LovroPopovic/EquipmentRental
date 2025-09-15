@@ -1,7 +1,7 @@
 import { useTheme } from '../context/ThemeContext';
-import { colors, ColorScheme } from '../utils/colors';
+import { colors } from '../utils/colors';
 
-export const useColors = (): ColorScheme => {
+export const useColors = () => {
   const { theme } = useTheme();
   return colors[theme];
 };

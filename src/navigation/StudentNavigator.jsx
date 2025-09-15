@@ -1,16 +1,15 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StaffTabParamList } from './types';
 import { useColors } from '../hooks/useColors';
-import DashboardScreen from '../screens/staff/DashboardScreen';
-import EquipmentScreen from '../screens/staff/EquipmentScreen';
-import StudentsScreen from '../screens/staff/StudentsScreen';
-import ProfileScreen from '../screens/staff/ProfileScreen';
+import HomeScreen from '../screens/student/HomeScreen';
+import SearchScreen from '../screens/student/SearchScreen';
+import BookingsScreen from '../screens/student/BookingsScreen';
+import ProfileScreen from '../screens/student/ProfileScreen';
 
-const Tab = createBottomTabNavigator<StaffTabParamList>();
+const Tab = createBottomTabNavigator();
 
-const StaffNavigator: React.FC = () => {
+const StudentNavigator = () => {
   const colors = useColors();
 
   return (
@@ -26,32 +25,32 @@ const StaffNavigator: React.FC = () => {
       }}
     >
       <Tab.Screen 
-        name="Dashboard" 
-        component={DashboardScreen}
+        name="Home" 
+        component={HomeScreen}
         options={{
-          tabBarLabel: 'Pregled',
+          tabBarLabel: 'Početna',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="stats-chart" size={size} color={color} />
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen 
-        name="Equipment" 
-        component={EquipmentScreen}
+        name="Search" 
+        component={SearchScreen}
         options={{
-          tabBarLabel: 'Oprema',
+          tabBarLabel: 'Pretraži',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="hardware-chip" size={size} color={color} />
+            <Ionicons name="search" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen 
-        name="Students" 
-        component={StudentsScreen}
+        name="Bookings" 
+        component={BookingsScreen}
         options={{
-          tabBarLabel: 'Studenti',
+          tabBarLabel: 'Rezervacije',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" size={size} color={color} />
+            <Ionicons name="calendar" size={size} color={color} />
           ),
         }}
       />
@@ -69,4 +68,4 @@ const StaffNavigator: React.FC = () => {
   );
 };
 
-export default StaffNavigator;
+export default StudentNavigator;

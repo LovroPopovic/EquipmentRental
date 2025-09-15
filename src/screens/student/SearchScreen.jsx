@@ -3,18 +3,17 @@ import { View, Text } from 'react-native';
 import { StudentScreenProps } from '../../navigation/types';
 import { useColors } from '../../hooks/useColors';
 
-type Props = StudentScreenProps<'Home'>;
 
-const HomeScreen: React.FC<Props> = () => {
+const SearchScreen = () => {
   const colors = useColors();
 
   return (
     <View className="flex-1 justify-center items-center" style={{ backgroundColor: colors.background }}>
       <Text className="text-2xl font-bold" style={{ color: colors.text }}>
-        Student Home Screen
+        Search Screen
       </Text>
     </View>
   );
 };
 
-export default HomeScreen;
+export default SearchScreen;
