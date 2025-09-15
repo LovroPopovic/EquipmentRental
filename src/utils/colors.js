@@ -13,6 +13,7 @@ export const colors = {
     warning: '#F59E0B',
     error: '#EF4444',
     info: '#06B6D4',
+    statusBarStyle: 'dark-content',
   },
   dark: {
     primary: '#3B82F6',
@@ -28,5 +29,6 @@ export const colors = {
     warning: '#F59E0B',
     error: '#EF4444',
     info: '#06B6D4',
+    statusBarStyle: 'light-content',
   },
 };

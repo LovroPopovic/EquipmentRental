@@ -10,7 +10,7 @@ import StaffNavigator from './StaffNavigator';
 const Stack = createNativeStackNavigator();
 
 
-const AppNavigator = ({ isAuthenticated, userRole }) => {
+const AppNavigator = ({ isAuthenticated, userRole, onAuthChange }) => {
   const { isDark } = useTheme();
   const colors = useColors();
 
@@ -48,7 +48,9 @@ const AppNavigator = ({ isAuthenticated, userRole }) => {
     <NavigationContainer theme={theme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+          <Stack.Screen name="Auth">
+            {(props) => <AuthNavigator {...props} onAuthChange={onAuthChange} />}
+          </Stack.Screen>
         ) : userRole === 'student' ? (
           <Stack.Screen name="StudentApp" component={StudentNavigator} />
         ) : (

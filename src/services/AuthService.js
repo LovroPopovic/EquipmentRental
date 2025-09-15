@@ -29,29 +29,42 @@ const JWKS_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 class AuthService {
   /**
+   * Development mode: Login with mock user data
+   * @param {string} role - 'student' or 'staff'
+   * @returns {Promise<any>} Mock authentication result
+   */
+  async loginDevMode(role) {
+    try {
+      const mockUserInfo = {
+        aaiUniqueId: `dev_${role}_${Date.now()}`,
+        email: `${role}@apu.hr`,
+        firstName: role === 'student' ? 'Ana' : 'Marko',
+        lastName: role === 'student' ? 'Studenta' : 'Profesor',
+        displayName: role === 'student' ? 'Ana Studenta' : 'Marko Profesor',
+        rawRoles: role === 'student' ? ['student'] : ['djelatnik', 'nastavnik'],
+      };
+
+      const mockAuthResult = {
+        accessToken: `dev_access_token_${Date.now()}`,
+        refreshToken: `dev_refresh_token_${Date.now()}`,
+        idToken: `dev_id_token_${Date.now()}`,
+      };
+
+      await this.storeAuthData(mockAuthResult, mockUserInfo);
+      return mockAuthResult;
+    } catch (error) {
+      throw new Error('Development mode login failed');
+    }
+  }
+  /**
    * Initiates AAI@EduHr authentication flow.
    * @returns {Promise<any | null>} Authentication result or null if failed
    */
   async loginWithAai() {
     try {
-      console.log('Starting AAI@EduHr authentication...');
-      console.log('Auth config payload:', JSON.stringify(aaiAuthConfig, null, 2));
-      
-      // Log individual config parts for debugging
-      console.log('Authorization URL:', aaiAuthConfig.serviceConfiguration.authorizationEndpoint);
-      console.log('Token URL:', aaiAuthConfig.serviceConfiguration.tokenEndpoint);
-      console.log('Client ID:', aaiAuthConfig.clientId);
-      console.log('Redirect URL:', aaiAuthConfig.redirectUrl);
-      console.log('Scopes:', aaiAuthConfig.scopes);
-      
-      console.log('IMPORTANT: Check if this client ID is registered in AAI@EduHr admin panel');
-      console.log('IMPORTANT: Check if redirect URL apuoprema://oauth/callback is registered');
-      console.log('IMPORTANT: Check if client is configured as PUBLIC (not confidential)');
-      console.log('IMPORTANT: Check if PKCE is enabled for this client');
       
       const authResult = await authorize(aaiAuthConfig);
       
-      console.log('AAI authentication successful, processing tokens...');
       
       if (!authResult.idToken) {
         throw new Error('NoIdToken: Authentication succeeded but no ID token was received.');
@@ -63,19 +76,9 @@ class AuthService {
       // Store authentication data securely
       await this.storeAuthData(authResult, userInfo);
       
-      console.log('Authentication completed successfully for user:', userInfo.displayName);
       return authResult;
       
     } catch (error) {
-      console.error('AAI Login failed:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        domain: error.domain,
-        userInfo: error.userInfo,
-        description: error.description,
-        additionalInfo: error.additionalInfo
-      });
       
       // Clean up any partial authentication state
       await this.clearAuthData();
@@ -123,7 +126,6 @@ class AuthService {
 
       return authResult;
     } catch (error) {
-      console.error('Token refresh failed:', error);
       await this.clearAuthData();
       return null;
     }
@@ -144,11 +146,9 @@ class AuthService {
         });
       }
     } catch (error) {
-      console.warn('Token revocation failed (continuing with logout):', error);
     } finally {
       // Always clear local authentication data
       await this.clearAuthData();
-      console.log('User logged out successfully');
     }
   }
 
@@ -168,7 +168,6 @@ class AuthService {
         idToken: idTokenResult ? idTokenResult.password : null,
       };
     } catch (error) {
-      console.error('Failed to retrieve tokens:', error);
       return { accessToken: null, refreshToken: null, idToken: null };
     }
   }
@@ -182,7 +181,6 @@ class AuthService {
       const userDataString = await AsyncStorage.getItem(USER_DATA_KEY);
       return userDataString ? JSON.parse(userDataString) : null;
     } catch (error) {
-      console.error('Failed to retrieve user info:', error);
       return null;
     }
   }
@@ -199,11 +197,17 @@ class AuthService {
         return false;
       }
 
-      // Validate ID token is still valid
+      // Check if this is a development mode token
+      if (tokens.idToken.startsWith('dev_id_token_')) {
+        // For development mode, just check if user data exists
+        const userInfo = await this.getUserInfo();
+        return userInfo !== null;
+      }
+
+      // Validate real ID token
       await this.decodeIdToken(tokens.idToken);
       return true;
     } catch (error) {
-      console.log('Authentication check failed:', error.message);
       // Clear invalid tokens
       await this.clearAuthData();
       return false;
@@ -227,7 +231,6 @@ class AuthService {
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
 
-      console.log("Decoded ID Token (check attributes):", decoded); // VERY IMPORTANT FOR DEBUG
 
       // Verify JWS signature first
       await this.verifyJwtSignature(idToken);
@@ -251,7 +254,6 @@ class AuthService {
                      : []),
       };
     } catch (error) {
-      console.error('Error decoding ID token:', error);
       throw new Error('Invalid or unreadable ID token received.');
     }
   }
@@ -301,7 +303,6 @@ class AuthService {
       throw new Error('ID token issued in the future');
     }
 
-    console.log('ID token validation passed');
   }
 
   /**
@@ -332,14 +333,9 @@ class AuthService {
       const jwk = await keystore.add(key);
       
       const result = await jose.JWS.createVerify(keystore).verify(token);
-      console.log('JWT signature verification passed');
       
       return result;
     } catch (error) {
-      console.error('JWT signature verification failed:', error);
-      // For now, log the error but don't fail authentication
-      // In production, you might want to fail authentication
-      console.warn('Continuing without signature verification - consider enabling strict mode in production');
     }
   }
 
@@ -376,7 +372,6 @@ class AuthService {
 
       return jwks;
     } catch (error) {
-      console.error('Failed to fetch JWKS:', error);
       // Return empty JWKS to avoid breaking authentication
       return { keys: [] };
     }

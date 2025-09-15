@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, ImageBackground } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, ImageBackground } from 'react-native';
 import { useColors } from '../../hooks/useColors';
 import { useTheme } from '../../context/ThemeContext';
 import { authService } from '../../services/AuthService';
@@ -17,68 +17,40 @@ const ApuLogo = ({ size = 60, color }) => (
   </Svg>
 );
 
-const LoginScreen = () => {
+const LoginScreen = ({ navigation, onAuthChange }) => {
   const colors = useColors();
   const { isDark } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [loggedInRole, setLoggedInRole] = useState(null);
+
 
   /**
-   * Initiates AAI@EduHr login process.
-   * Handles success, errors, and navigation/role display.
+   * Development mode: Login as student
    */
-  const handleAaiLogin = async () => {
-    setLoading(true);
-    setLoggedInRole(null);
-
+  const handleDevStudentLogin = async () => {
     try {
-      // Call AAI@EduHr authentication service
-      const authResult = await authService.loginWithAai();
-
-      if (authResult) {
-        // Get parsed user info from storage
-        const userInfo = await authService.getUserInfo();
-
-        if (userInfo) {
-          // Temporary role display on screen (for testing)
-          setLoggedInRole(userInfo.rawRoles.join(', '));
-          
-          // Here we would normally do redirection, but for AAI flow testing we just display the role
-          // Example navigation for future phases:
-          // const isStudent = userInfo.rawRoles.includes('student');
-          // const isStaff = userInfo.rawRoles.some(role => ['djelatnik', 'nastavnik', 'admin'].includes(role));
-
-          // if (isStudent && !isStaff) {
-          //   navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'StudentApp' }] }));
-          // } else if (isStaff) {
-          //   navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'StaffApp' }] }));
-          // } else {
-          //   Alert.alert('Uloga neprepoznata', 'Vaša uloga nije prepoznata. Molimo kontaktirajte administratora.');
-          //   await authService.logoutAai();
-          // }
-        } else {
-          // Although authResult was successful, userInfo couldn't be retrieved - anomaly
-          throw new Error('User information could not be retrieved after successful authentication.');
-        }
+      await authService.loginDevMode('student');
+      // Trigger auth state check in App.jsx which will update navigation
+      if (onAuthChange) {
+        onAuthChange();
       }
     } catch (error) {
-      console.error('AAI Login Error:', error.message, error.code, error.data);
-      // Standardized error messages
-      let errorMessage = 'Prijava neuspješna. Pokušajte ponovno.';
-      if (error.code === 'error.browser_returned_error') {
-        errorMessage = 'Prijava je otkazana ili neuspješna u pregledniku.';
-      } else if (error.message.includes('NoAccessToken')) {
-        errorMessage = 'Autentifikacija nije vratila pristupni token.';
-      } else if (error.message.includes('Invalid or unreadable ID token')) {
-        errorMessage = 'Greška s korisničkim podacima nakon prijave.';
-      }
-      Alert.alert('Greška pri prijavi', errorMessage);
-      setLoggedInRole('GREŠKA: ' + errorMessage);
-    } finally {
-      setLoading(false);
+      Alert.alert('Greška', 'Development login failed');
     }
   };
 
+  /**
+   * Development mode: Login as staff/professor
+   */
+  const handleDevStaffLogin = async () => {
+    try {
+      await authService.loginDevMode('staff');
+      // Trigger auth state check in App.jsx which will update navigation
+      if (onAuthChange) {
+        onAuthChange();
+      }
+    } catch (error) {
+      Alert.alert('Greška', 'Development login failed');
+    }
+  };
 
   return (
     <ImageBackground
@@ -95,44 +67,22 @@ const LoginScreen = () => {
 
           {/* Authentication section */}
           <View style={styles.authSection}>
-            <Text style={[styles.loginPrompt, { color: colors.text }]}>
-              Prijavite se putem AAI@EduHr računa
-            </Text>
-
             <TouchableOpacity
-              style={[styles.aaiLoginButton, { backgroundColor: colors.primary }]}
-              onPress={handleAaiLogin}
-              disabled={loading}
+              style={[styles.studentButton, { backgroundColor: '#3B82F6' }]}
+              onPress={handleDevStudentLogin}
             >
-              {loading ? (
-                <ActivityIndicator color={colors.text} />
-              ) : (
-                <Text style={styles.aaiLoginButtonText}>
-                  Prijava
-                </Text>
-              )}
+              <Text style={styles.buttonText}>
+                Student
+              </Text>
             </TouchableOpacity>
 
-            {/* Section for role display after login */}
-            {loggedInRole && (
-              <Text style={[styles.roleDisplay, { color: colors.text }]}>
-                Uloga: {loggedInRole}
-              </Text>
-            )}
-
-            {/* Guest login option - according to Figma design */}
             <TouchableOpacity
-              style={[styles.guestLoginButton, { borderColor: colors.text }]}
-              onPress={() => Alert.alert('Gost Prijava', 'Funkcionalnost prijave za goste nije implementirana u ovoj fazi.')}
+              style={[styles.staffButton, { backgroundColor: '#6B7280' }]}
+              onPress={handleDevStaffLogin}
             >
-              <View style={styles.guestButtonContent}>
-                <Text style={[styles.guestLoginButtonText, { color: colors.text }]}>
-                  Prijava za goste
-                </Text>
-                <Text style={[styles.guestLoginButtonText, { color: colors.text }]}>
-                  →
-                </Text>
-              </View>
+              <Text style={styles.buttonText}>
+                Osoblje
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -165,13 +115,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
-  loginPrompt: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  aaiLoginButton: {
+  studentButton: {
     width: '80%',
     paddingVertical: 15,
     borderRadius: 25,
@@ -179,33 +123,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 15,
   },
-  aaiLoginButtonText: {
+  staffButton: {
+    width: '80%',
+    paddingVertical: 15,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+  buttonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  roleDisplay: {
-    fontSize: 16,
-    marginTop: 10,
-    fontWeight: 'bold',
-  },
-  guestLoginButton: {
-    width: '80%',
-    paddingVertical: 10,
-    borderRadius: 25,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  guestButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  guestLoginButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 
