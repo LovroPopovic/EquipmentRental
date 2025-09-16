@@ -1,5 +1,5 @@
 // Mock data for equipment rental app
-export const mockEquipment = [
+let mockEquipmentData = [
   {
     id: 1,
     name: 'Nikon D3500',
@@ -124,6 +124,33 @@ export const mockEquipment = [
     owner: null, // University equipment
   },
 ];
+
+export const mockEquipment = mockEquipmentData;
+
+// Function to add new equipment
+export const addEquipment = (equipment) => {
+  mockEquipmentData.push(equipment);
+  return equipment;
+};
+
+// Function to update equipment
+export const updateEquipment = (id, updates) => {
+  const index = mockEquipmentData.findIndex(item => item.id === id);
+  if (index !== -1) {
+    mockEquipmentData[index] = { ...mockEquipmentData[index], ...updates };
+    return mockEquipmentData[index];
+  }
+  return null;
+};
+
+// Function to delete equipment
+export const deleteEquipment = (id) => {
+  const index = mockEquipmentData.findIndex(item => item.id === id);
+  if (index !== -1) {
+    return mockEquipmentData.splice(index, 1)[0];
+  }
+  return null;
+};
 
 export const mockCategories = [
   { id: 1, name: 'Kamere', icon: 'camera', count: 15 },

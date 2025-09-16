@@ -5,11 +5,12 @@ import { useTheme } from '../context/ThemeContext';
 import { useColors } from '../hooks/useColors';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
+import StaffNavigator from './StaffNavigator';
 
 const Stack = createNativeStackNavigator();
 
 
-const AppNavigator = ({ isAuthenticated, onAuthChange }) => {
+const AppNavigator = ({ isAuthenticated, userRole, onAuthChange }) => {
   const { isDark } = useTheme();
   const colors = useColors();
 
@@ -50,6 +51,8 @@ const AppNavigator = ({ isAuthenticated, onAuthChange }) => {
           <Stack.Screen name="Auth">
             {(props) => <AuthNavigator {...props} onAuthChange={onAuthChange} />}
           </Stack.Screen>
+        ) : userRole === 'staff' ? (
+          <Stack.Screen name="StaffApp" component={StaffNavigator} />
         ) : (
           <Stack.Screen name="MainApp" component={MainNavigator} />
         )}

@@ -7,6 +7,7 @@ import { authService } from './src/services/AuthService';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -27,8 +28,17 @@ export default function App() {
     try {
       const authenticated = await authService.isAuthenticated();
       setIsAuthenticated(authenticated);
+
+      if (authenticated) {
+        // Get user role if authenticated
+        const role = await authService.getUserRole();
+        setUserRole(role);
+      } else {
+        setUserRole(null);
+      }
     } catch (error) {
       setIsAuthenticated(false);
+      setUserRole(null);
     } finally {
       setIsLoading(false);
     }
@@ -42,6 +52,7 @@ export default function App() {
     <ThemeProvider>
       <AppNavigator
         isAuthenticated={isAuthenticated}
+        userRole={userRole}
         onAuthChange={checkAuthStatus}
       />
       <StatusBar style="auto" />

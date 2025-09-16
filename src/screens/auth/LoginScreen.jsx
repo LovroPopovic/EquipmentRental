@@ -21,19 +21,45 @@ const LoginScreen = ({ navigation, onAuthChange }) => {
   const colors = useColors();
   const { isDark } = useTheme();
 
-
   /**
-   * Development mode: Login
+   * AAI@EduHr OIDC Login
    */
-  const handleDevLogin = async () => {
+  const handleAAILogin = async () => {
     try {
-      await authService.loginDevMode();
-      // Trigger auth state check in App.jsx which will update navigation
+      await authService.login();
       if (onAuthChange) {
         onAuthChange();
       }
     } catch (error) {
-      Alert.alert('Greška', 'Development login failed');
+      Alert.alert('Greška prijave', error.message);
+    }
+  };
+
+  /**
+   * Development Login - Student
+   */
+  const handleDevStudentLogin = async () => {
+    try {
+      await authService.loginDev('student');
+      if (onAuthChange) {
+        onAuthChange();
+      }
+    } catch (error) {
+      Alert.alert('Greška', 'Development student login failed');
+    }
+  };
+
+  /**
+   * Development Login - Staff
+   */
+  const handleDevStaffLogin = async () => {
+    try {
+      await authService.loginDev('staff');
+      if (onAuthChange) {
+        onAuthChange();
+      }
+    } catch (error) {
+      Alert.alert('Greška', 'Development staff login failed');
     }
   };
 
@@ -54,12 +80,35 @@ const LoginScreen = ({ navigation, onAuthChange }) => {
           <View style={styles.authSection}>
             <TouchableOpacity
               style={[styles.loginButton, { backgroundColor: '#3B82F6' }]}
-              onPress={handleDevLogin}
+              onPress={handleAAILogin}
             >
               <Text style={styles.buttonText}>
-                Prijavi se
+                Prijavi se (AAI@EduHr)
               </Text>
             </TouchableOpacity>
+
+            {/* Development options */}
+            <View style={styles.devSection}>
+              <Text style={[styles.devTitle, { color: colors.textSecondary }]}>
+                Razvoj:
+              </Text>
+              <TouchableOpacity
+                style={[styles.devButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={handleDevStudentLogin}
+              >
+                <Text style={[styles.devButtonText, { color: colors.text }]}>
+                  Student
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.devButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={handleDevStaffLogin}
+              >
+                <Text style={[styles.devButtonText, { color: colors.text }]}>
+                  Osoblje
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -103,6 +152,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  devSection: {
+    marginTop: 20,
+    alignItems: 'center',
+    width: '100%',
+  },
+  devTitle: {
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  devButton: {
+    width: '60%',
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  devButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

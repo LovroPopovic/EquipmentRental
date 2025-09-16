@@ -8,8 +8,9 @@ import SearchScreen from '../screens/main/SearchScreen';
 import BookingsScreen from '../screens/main/BookingsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import EquipmentDetailScreen from '../screens/main/EquipmentDetailScreen';
-import MessageScreen from '../screens/main/MessageScreen';
+import ChatScreen from '../screens/common/ChatScreen';
 import MessagesListScreen from '../screens/main/MessagesListScreen';
+import AddEquipmentScreen from '../screens/main/AddEquipmentScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -93,8 +94,13 @@ const MainNavigator = () => {
         options={{ presentation: 'modal' }}
       />
       <Stack.Screen
-        name="Message"
-        component={MessageScreen}
+        name="AddEquipment"
+        component={AddEquipmentScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

@@ -1,0 +1,474 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  ScrollView,
+  TextInput,
+  Alert,
+  Modal,
+  Image
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useColors } from '../../hooks/useColors';
+import { mockCategories, addEquipment, updateEquipment } from '../../data/mockData';
+import { authService } from '../../services/AuthService';
+
+const AddEquipmentScreen = ({ navigation, route }) => {
+  const colors = useColors();
+  const isEditMode = route?.params?.isEditMode || false;
+  const editingEquipment = route?.params?.equipment;
+
+  const [formData, setFormData] = useState({
+    name: editingEquipment?.name || '',
+    category: editingEquipment?.category || '',
+    description: editingEquipment?.description || '',
+    location: editingEquipment?.location || '',
+    imageUrl: editingEquipment?.imageUrl || null
+  });
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleBackPress = () => {
+    navigation.goBack();
+  };
+
+  const requestPermissions = async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (cameraStatus !== 'granted' || mediaStatus !== 'granted') {
+      Alert.alert(
+        'Dozvole potrebne',
+        'Potrebne su dozvole za pristup kameri i galeriji za dodavanje slika.'
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const handleImagePicker = () => {
+    Alert.alert(
+      'Dodaj sliku',
+      'Odaberite način dodavanja slike',
+      [
+        {
+          text: 'Kamera',
+          onPress: () => pickImageFromCamera()
+        },
+        {
+          text: 'Galerija',
+          onPress: () => pickImageFromGallery()
+        },
+        {
+          text: 'Odustani',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
+  const pickImageFromCamera = async () => {
+    const hasPermissions = await requestPermissions();
+    if (!hasPermissions) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setFormData(prev => ({ ...prev, imageUrl: result.assets[0].uri }));
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    const hasPermissions = await requestPermissions();
+    if (!hasPermissions) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setFormData(prev => ({ ...prev, imageUrl: result.assets[0].uri }));
+    }
+  };
+
+  const handleRemoveImage = () => {
+    Alert.alert(
+      'Ukloni sliku',
+      'Jeste li sigurni da želite ukloniti sliku?',
+      [
+        { text: 'Ne', style: 'cancel' },
+        {
+          text: 'Da',
+          style: 'destructive',
+          onPress: () => setFormData(prev => ({ ...prev, imageUrl: null }))
+        }
+      ]
+    );
+  };
+
+  const validateForm = () => {
+    if (!formData.name.trim()) {
+      Alert.alert('Greška', 'Molimo unesite naziv opreme.');
+      return false;
+    }
+    if (!formData.category) {
+      Alert.alert('Greška', 'Molimo odaberite kategoriju opreme.');
+      return false;
+    }
+    if (!formData.description.trim()) {
+      Alert.alert('Greška', 'Molimo unesite opis opreme.');
+      return false;
+    }
+    if (!formData.location.trim()) {
+      Alert.alert('Greška', 'Molimo unesite lokaciju opreme.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+
+    try {
+      if (isEditMode) {
+        // Update existing equipment
+        const updatedData = {
+          name: formData.name.trim(),
+          category: formData.category,
+          description: formData.description.trim(),
+          location: formData.location.trim(),
+          imageUrl: formData.imageUrl
+        };
+
+        updateEquipment(editingEquipment.id, updatedData);
+
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        Alert.alert(
+          'Uspjeh',
+          'Oprema je uspješno ažurirana!',
+          [
+            {
+              text: 'U redu',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+      } else {
+        // Get current user info to set as owner
+        const userInfo = await authService.getUserInfo();
+
+        // Create equipment payload matching mock data structure
+        const equipmentPayload = {
+          id: Date.now(), // In real app, this would be generated by backend
+          name: formData.name.trim(),
+          category: formData.category,
+          description: formData.description.trim(),
+          location: formData.location.trim(),
+          imageUrl: formData.imageUrl,
+          available: true, // New equipment is always available
+          borrower: null, // No borrower when first added
+          owner: {
+            name: userInfo?.displayName || 'Ana Korisnik',
+            role: 'user',
+            email: userInfo?.email || 'user@apu.hr'
+          }
+        };
+
+        // Add equipment to mock data
+        addEquipment(equipmentPayload);
+
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        Alert.alert(
+          'Uspjeh',
+          'Oprema je uspješno dodana! Vaša oprema će biti vidljiva drugim korisnicima.',
+          [
+            {
+              text: 'U redu',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error submitting equipment:', error);
+      Alert.alert(
+        'Greška',
+        isEditMode
+          ? 'Došlo je do greške prilikom ažuriranja opreme. Molimo pokušajte ponovo.'
+          : 'Došlo je do greške prilikom dodavanja opreme. Molimo pokušajte ponovo.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCategorySelect = (category) => {
+    setFormData(prev => ({ ...prev, category: category.name }));
+    setShowCategoryModal(false);
+  };
+
+  const CategoryModal = () => (
+    <Modal
+      visible={showCategoryModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowCategoryModal(false)}
+    >
+      <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <View className="rounded-t-3xl" style={{ backgroundColor: colors.background, maxHeight: '70%' }}>
+          <View className="flex-row items-center justify-between p-6 pb-4" style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <Text className="text-xl font-bold" style={{ color: colors.text }}>
+              Odaberite kategoriju
+            </Text>
+            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView className="p-6">
+            {mockCategories.map(category => (
+              <TouchableOpacity
+                key={category.id}
+                onPress={() => handleCategorySelect(category)}
+                className="flex-row items-center py-4"
+                style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
+              >
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                  style={{ backgroundColor: colors.surface }}
+                >
+                  <Ionicons name={category.icon} size={20} color={colors.primary} />
+                </View>
+                <Text className="text-base font-medium flex-1" style={{ color: colors.text }}>
+                  {category.name}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  return (
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
+      <StatusBar backgroundColor={colors.background} barStyle={colors.statusBarStyle} />
+
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <TouchableOpacity onPress={handleBackPress} className="p-2 -ml-2">
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text className="text-lg font-semibold" style={{ color: colors.text }}>
+          {isEditMode ? 'Uredi opremu' : 'Dodaj opremu'}
+        </Text>
+        <View className="w-8" />
+      </View>
+
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View className="p-4">
+          {/* Equipment Image */}
+          <TouchableOpacity
+            onPress={handleImagePicker}
+            className="mx-4 mb-6 rounded-xl overflow-hidden"
+            style={{
+              backgroundColor: colors.surface,
+              aspectRatio: 1.5,
+              borderWidth: 1,
+              borderColor: colors.border
+            }}
+          >
+            {formData.imageUrl ? (
+              <View className="flex-1">
+                <Image
+                  source={{ uri: formData.imageUrl }}
+                  className="flex-1 w-full"
+                  style={{ aspectRatio: 1.5 }}
+                  resizeMode="cover"
+                />
+                {/* Remove Image Button */}
+                <TouchableOpacity
+                  onPress={handleRemoveImage}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full items-center justify-center"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+                >
+                  <Ionicons name="close" size={16} color="white" />
+                </TouchableOpacity>
+                {/* Edit Image Overlay */}
+                <View
+                  className="absolute bottom-0 left-0 right-0 py-2 items-center"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+                >
+                  <Text className="text-white text-xs">Dodirnite za promjenu</Text>
+                </View>
+              </View>
+            ) : (
+              <View className="flex-1 items-center justify-center">
+                <Ionicons name="camera" size={48} color={colors.textSecondary} />
+                <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+                  Dodajte sliku opreme
+                </Text>
+                <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+                  Dodirnite za odabir
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Equipment Name */}
+          <View className="mb-4">
+            <Text className="text-base font-semibold mb-2" style={{ color: colors.text }}>
+              Naziv opreme *
+            </Text>
+            <TextInput
+              value={formData.name}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, name: text }))}
+              placeholder="Unesite naziv opreme..."
+              placeholderTextColor={colors.textSecondary}
+              className="p-4 rounded-lg text-base"
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.text
+              }}
+              maxLength={100}
+            />
+          </View>
+
+          {/* Category */}
+          <View className="mb-4">
+            <Text className="text-base font-semibold mb-2" style={{ color: colors.text }}>
+              Kategorija *
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowCategoryModal(true)}
+              className="p-4 rounded-lg flex-row items-center justify-between"
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border
+              }}
+            >
+              <Text
+                className="text-base"
+                style={{ color: formData.category ? colors.text : colors.textSecondary }}
+              >
+                {formData.category || 'Odaberite kategoriju...'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Description */}
+          <View className="mb-4">
+            <Text className="text-base font-semibold mb-2" style={{ color: colors.text }}>
+              Opis *
+            </Text>
+            <TextInput
+              value={formData.description}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+              placeholder="Opišite opremu..."
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              numberOfLines={4}
+              className="p-4 rounded-lg text-base"
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.text,
+                minHeight: 100,
+                textAlignVertical: 'top'
+              }}
+              maxLength={500}
+            />
+            <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+              {formData.description.length}/500 znakova
+            </Text>
+          </View>
+
+          {/* Location */}
+          <View className="mb-6">
+            <Text className="text-base font-semibold mb-2" style={{ color: colors.text }}>
+              Lokacija *
+            </Text>
+            <TextInput
+              value={formData.location}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, location: text }))}
+              placeholder="Gdje se oprema nalazi..."
+              placeholderTextColor={colors.textSecondary}
+              className="p-4 rounded-lg text-base"
+              style={{
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.text
+              }}
+              maxLength={100}
+            />
+          </View>
+
+          {/* Info Card */}
+          <View className="mb-6 p-4 rounded-lg" style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+            <View className="flex-row mb-2">
+              <Ionicons name="information-circle" size={20} color={colors.primary} />
+              <Text className="text-base font-semibold ml-2" style={{ color: colors.text }}>
+                Važne informacije
+              </Text>
+            </View>
+            <Text className="text-sm leading-5" style={{ color: colors.textSecondary }}>
+              • Oprema koju dodajete bit će vidljiva svim korisnicima{'\n'}
+              • Drugi korisnici mogu vam poslati poruke za rezervaciju{'\n'}
+              • Možete urediti ili ukloniti opremu u bilo kojem trenutku{'\n'}
+              • Budite precizni u opisu kako biste izbjegli nesporazume
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Submit Button */}
+      <View className="p-4" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+        <TouchableOpacity
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+          className="py-4 rounded-xl"
+          style={{
+            backgroundColor: isSubmitting ? colors.border : colors.primary,
+            opacity: isSubmitting ? 0.7 : 1
+          }}
+        >
+          <Text className="text-center text-lg font-bold text-white">
+            {isSubmitting
+              ? (isEditMode ? 'Ažuriram...' : 'Dodajem...')
+              : (isEditMode ? 'Ažuriraj opremu' : 'Dodaj opremu')
+            }
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <CategoryModal />
+    </SafeAreaView>
+  );
+};
+
+export default AddEquipmentScreen;

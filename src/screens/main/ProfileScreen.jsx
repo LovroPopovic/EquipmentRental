@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, FlatList, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, FlatList, Alert, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
+import { useTheme } from '../../context/ThemeContext';
 import { authService } from '../../services/AuthService';
 
 const ProfileScreen = ({ navigation }) => {
   const colors = useColors();
+  const { theme, toggleTheme, isDark } = useTheme();
 
   // Mock user data (would come from auth service)
   const [user] = useState({
@@ -234,6 +236,36 @@ const ProfileScreen = ({ navigation }) => {
                 {formatDate(user.joinDate)}
               </Text>
             </View>
+          </View>
+        </View>
+
+        {/* Settings Section */}
+        <View
+          className="mx-4 mb-6 p-4 rounded-lg"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text className="text-lg font-semibold mb-3" style={{ color: colors.text }}>
+            Postavke
+          </Text>
+
+          <View className="flex-row items-center justify-between py-2">
+            <View className="flex-row items-center">
+              <Ionicons
+                name={isDark ? "moon" : "sunny"}
+                size={20}
+                color={colors.textSecondary}
+                style={{ marginRight: 12 }}
+              />
+              <Text className="text-base" style={{ color: colors.text }}>
+                Tamna tema
+              </Text>
+            </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.border, true: colors.primary + '40' }}
+              thumbColor={isDark ? colors.primary : colors.textSecondary}
+            />
           </View>
         </View>
 
