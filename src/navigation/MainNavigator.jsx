@@ -8,9 +8,6 @@ import SearchScreen from '../screens/main/SearchScreen';
 import BookingsScreen from '../screens/main/BookingsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import EquipmentDetailScreen from '../screens/main/EquipmentDetailScreen';
-import ChatScreen from '../screens/common/ChatScreen';
-import MessagesListScreen from '../screens/main/MessagesListScreen';
-import AddEquipmentScreen from '../screens/main/AddEquipmentScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -61,16 +58,6 @@ const MainTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="Messages"
-        component={MessagesListScreen}
-        options={{
-          tabBarLabel: 'Poruke',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
@@ -91,16 +78,6 @@ const MainNavigator = () => {
       <Stack.Screen
         name="EquipmentDetail"
         component={EquipmentDetailScreen}
-        options={{ presentation: 'modal' }}
-      />
-      <Stack.Screen
-        name="AddEquipment"
-        component={AddEquipmentScreen}
-        options={{ presentation: 'modal' }}
-      />
-      <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

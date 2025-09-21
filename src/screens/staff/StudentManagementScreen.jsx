@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   StatusBar,
   FlatList,
   TextInput,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
+import { apiService } from '../../services/ApiService';
 import StudentCard from '../../components/cards/StudentCard';
 import SearchBar from '../../components/common/SearchBar';
 import Header from '../../components/common/Header';
@@ -19,38 +21,39 @@ import Header from '../../components/common/Header';
 const StudentManagementScreen = ({ navigation }) => {
   const colors = useColors();
   const [searchQuery, setSearchQuery] = useState('');
+  const [students, setStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock student data
-  const [students] = useState([
-    {
-      id: 1,
-      name: 'Ana Marić',
-      email: 'ana.maric@student.apu.hr',
-      borrowedCount: 2,
-      lastActivity: '2 sata'
-    },
-    {
-      id: 2,
-      name: 'Petar Novak',
-      email: 'petar.novak@student.apu.hr',
-      borrowedCount: 1,
-      lastActivity: '1 dan'
-    },
-    {
-      id: 3,
-      name: 'Marija Kovač',
-      email: 'marija.kovac@student.apu.hr',
-      borrowedCount: 0,
-      lastActivity: '3 dana'
-    },
-    {
-      id: 4,
-      name: 'Luka Jurić',
-      email: 'luka.juric@student.apu.hr',
-      borrowedCount: 3,
-      lastActivity: '4 sata'
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  const loadStudents = async () => {
+    try {
+      setIsLoading(true);
+      console.log('🔄 Loading students...');
+
+      const response = await apiService.getUsers({ role: 'STUDENT' });
+      const studentData = response.data || [];
+
+      // Transform backend data to display format
+      const transformedStudents = studentData.map(student => ({
+        id: student.id,
+        name: `${student.firstName} ${student.lastName}`,
+        email: student.email,
+        borrowedCount: 0, // TODO: Calculate from bookings
+        lastActivity: 'N/A' // TODO: Calculate from activity
+      }));
+
+      setStudents(transformedStudents);
+      console.log('👥 Students loaded:', transformedStudents.length);
+    } catch (error) {
+      console.error('❌ Failed to load students:', error);
+      setStudents([]);
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  };
 
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -64,10 +67,6 @@ const StudentManagementScreen = ({ navigation }) => {
       `Email: ${student.email}\nAktivne posudbe: ${student.borrowedCount}`,
       [
         { text: 'Odustani', style: 'cancel' },
-        {
-          text: 'Chat',
-          onPress: () => navigation.navigate('Chat', { otherUser: student })
-        },
         {
           text: 'Pošalji email',
           onPress: () => Alert.alert('Email', `Kontakt: ${student.email}`)
@@ -103,13 +102,43 @@ const StudentManagementScreen = ({ navigation }) => {
       </View>
 
       {/* Students List */}
-      <FlatList
-        data={filteredStudents}
-        renderItem={renderStudentItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 24, paddingTop: 0 }}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+            Učitavam studente...
+          </Text>
+        </View>
+      ) : filteredStudents.length > 0 ? (
+        <FlatList
+          data={filteredStudents}
+          renderItem={renderStudentItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ padding: 24, paddingTop: 0 }}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center px-4">
+          <View
+            className="w-16 h-16 rounded-full items-center justify-center mb-4"
+            style={{ backgroundColor: colors.surface }}
+          >
+            <Ionicons name="people-outline" size={32} color={colors.textSecondary} />
+          </View>
+          <Text
+            className="text-lg font-semibold mb-2 text-center"
+            style={{ color: colors.text }}
+          >
+            Nema studenata
+          </Text>
+          <Text
+            className="text-sm text-center"
+            style={{ color: colors.textSecondary }}
+          >
+            {searchQuery ? 'Pokušajte s drugim pojmovima za pretraživanje.' : 'Studenti će se prikazati ovdje kada se registriraju.'}
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };

@@ -1,78 +1,111 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, FlatList, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
+import { apiService } from '../../services/ApiService';
+import { authService } from '../../services/AuthService';
+import { useFocusEffect } from '@react-navigation/native';
+import { useBooking } from '../../context/BookingContext';
 
 const BookingsScreen = ({ navigation }) => {
   const colors = useColors();
+  const [activeBookings, setActiveBookings] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
+  const { triggerRefresh } = useBooking();
 
-  // Mock active bookings data
-  const [activeBookings] = useState([
-    {
-      id: 1,
-      equipmentName: 'Wacom CTL-472',
-      category: 'Tableti',
-      startDate: '2024-09-15',
-      endDate: '2024-09-20',
-      status: 'active',
-      owner: {
-        name: 'Prof. Ivo Kovač',
-        email: 'ivo.kovac@apu.hr',
-        role: 'profesor'
-      },
-      location: 'Grafička sala',
-      pickupTime: '09:00',
-      returnTime: '17:00',
-      equipment: {
-        id: 3,
-        name: 'Wacom CTL-472',
-        category: 'Tableti',
-        description: 'Grafički tablet za digitalno crtanje, USB povezivanje',
-        available: false,
-        location: 'Grafička sala',
+  // Load user bookings from API
+  const loadBookings = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Get current user
+      const currentUser = await authService.getUserInfo();
+      if (!currentUser) {
+        console.log('No user data available');
+        setActiveBookings([]);
+        return;
       }
-    },
-    {
-      id: 2,
-      equipmentName: 'Nikon D5600',
-      category: 'Kamere',
-      startDate: '2024-09-18',
-      endDate: '2024-09-22',
-      status: 'confirmed',
-      owner: null, // University equipment
-      location: 'Studio B',
-      pickupTime: '10:00',
-      returnTime: '16:00',
-      equipment: {
-        id: 4,
-        name: 'Nikon D5600',
-        category: 'Kamere',
-        description: 'DSLR kamera s Wi-Fi, 24.2MP, okretni LCD ekran',
-        available: false,
-        location: 'Studio B',
+
+      // Use backend user if available, otherwise use mock user data
+      const userData = currentUser.backendUser || currentUser;
+      let userId = userData.id || userData.userId;
+
+      // Convert mock user format to match database
+      if (!userId && userData.sub) {
+        userId = userData.sub.startsWith('dev_') ? `mock_user_${userData.sub.split('_').pop()}` : userData.sub;
       }
-    },
-    {
-      id: 3,
-      equipmentName: 'iPad Pro 12.9"',
-      category: 'Tableti',
-      startDate: '2024-09-25',
-      endDate: '2024-09-28',
-      status: 'pending',
-      owner: null,
-      location: 'Grafička sala',
-      pickupTime: '14:00',
-      returnTime: '18:00',
-      equipment: {
-        id: 8,
-        name: 'iPad Pro 12.9"',
-        category: 'Tableti',
-        description: 'Profesionalni tablet za dizajn, s Apple Pencil podrškom',
-        available: true,
-        location: 'Grafička sala',
-      }
+
+      console.log('Current user data:', userData);
+      console.log('Loading bookings for user ID:', userId);
+
+      setUser(userData);
+
+      // Get user's bookings
+      const response = await apiService.getUserBookings(userId);
+      const allBookings = response.data || [];
+
+      // Filter out cancelled bookings
+      const activeBookings = allBookings.filter(booking => booking.status !== 'CANCELLED');
+
+      console.log('User bookings loaded:', activeBookings.length, 'active out of', allBookings.length, 'total');
+      setActiveBookings(activeBookings);
+
+    } catch (err) {
+      console.error('Failed to load bookings:', err.message);
+      setError(err.message);
+
+      // No fallback - show empty state
+      console.log('Showing empty bookings state...');
+      setActiveBookings([]); // Use empty array as fallback
+
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  };
+
+  // Load bookings when component mounts and when screen is focused
+  useEffect(() => {
+    loadBookings();
+  }, []);
+
+  // Refresh bookings when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadBookings();
+    }, [])
+  );
+
+  // Handle booking cancellation
+  const handleCancelBooking = async (booking) => {
+    Alert.alert(
+      'Otkaži rezervaciju',
+      `Jeste li sigurni da želite otkazati rezervaciju za ${booking.equipment?.name || booking.equipmentName}?`,
+      [
+        { text: 'Ne', style: 'cancel' },
+        {
+          text: 'Da, otkaži',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiService.cancelBooking(booking.id);
+              Alert.alert('Uspjeh', 'Rezervacija je otkazana.');
+
+              // Trigger global refresh for all booking-related screens
+              triggerRefresh();
+
+              loadBookings(); // Reload bookings
+            } catch (error) {
+              Alert.alert('Greška', 'Došlo je do greške prilikom otkazivanja rezervacije.');
+              console.error('Cancel booking error:', error);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('hr-HR', {
@@ -115,59 +148,42 @@ const BookingsScreen = ({ navigation }) => {
     }
   };
 
-  const handleCancelBooking = (booking) => {
-    Alert.alert(
-      'Otkaži rezervaciju',
-      `Jeste li sigurni da želite otkazati rezervaciju za ${booking.equipmentName}?`,
-      [
-        { text: 'Ne', style: 'cancel' },
-        {
-          text: 'Da, otkaži',
-          style: 'destructive',
-          onPress: () => {
-            // Here would be the cancel booking logic
-            Alert.alert('Uspjeh', 'Rezervacija je otkazana.');
-          }
-        }
-      ]
-    );
-  };
 
   const handleContactOwner = (booking) => {
-    if (booking.owner) {
-      navigation.navigate('Message', {
-        owner: booking.owner,
-        equipment: booking.equipment
-      });
-    } else {
-      Alert.alert('Informacije', 'Ovo je sveučilišna oprema. Kontaktirajte administratore za više informacija.');
-    }
+    Alert.alert('Informacije', 'Kontakt funkcionalnost će biti dodana uskoro.');
   };
 
-  const renderBookingItem = ({ item }) => (
-    <View
-      className="p-4 mb-4 rounded-lg"
-      style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-    >
-      {/* Header */}
-      <View className="flex-row items-start justify-between mb-3">
-        <View className="flex-1">
-          <Text className="text-lg font-semibold mb-1" style={{ color: colors.text }}>
-            {item.equipmentName}
-          </Text>
-          <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>
-            {item.category} • {item.location}
-          </Text>
-        </View>
+  const renderBookingItem = ({ item }) => {
+    // Map backend data structure to display format
+    const equipmentName = item.equipment?.name || item.equipmentName || 'Unknown Equipment';
+    const category = item.equipment?.category || item.category || 'Unknown';
+    const location = item.equipment?.location || item.location || 'Unknown Location';
+    const status = item.status?.toLowerCase() || 'pending';
+
+    return (
+      <View
+        className="p-4 mb-4 rounded-lg"
+        style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+      >
+        {/* Header */}
+        <View className="flex-row items-start justify-between mb-3">
+          <View className="flex-1">
+            <Text className="text-lg font-semibold mb-1" style={{ color: colors.text }}>
+              {equipmentName}
+            </Text>
+            <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>
+              {category} • {location}
+            </Text>
+          </View>
         <View
           className="px-3 py-1 rounded-full"
-          style={{ backgroundColor: getStatusColor(item.status) + '20' }}
+          style={{ backgroundColor: getStatusColor(status) + '20' }}
         >
           <Text
             className="text-xs font-medium"
-            style={{ color: getStatusColor(item.status) }}
+            style={{ color: getStatusColor(status) }}
           >
-            {getStatusText(item.status)}
+            {getStatusText(status)}
           </Text>
         </View>
       </View>
@@ -247,9 +263,9 @@ const BookingsScreen = ({ navigation }) => {
             className="flex-1 mr-2 py-3 rounded-lg flex-row items-center justify-center"
             style={{ backgroundColor: colors.primary + '20' }}
           >
-            <Ionicons name="chatbubble" size={16} color={colors.primary} />
+            <Ionicons name="information-circle" size={16} color={colors.primary} />
             <Text className="ml-2 text-sm font-medium" style={{ color: colors.primary }}>
-              Poruka
+              Kontakt
             </Text>
           </TouchableOpacity>
         )}
@@ -266,7 +282,8 @@ const BookingsScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
     </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
@@ -285,7 +302,14 @@ const BookingsScreen = ({ navigation }) => {
       </View>
 
       {/* Active Bookings List */}
-      {activeBookings.length > 0 ? (
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+            Učitavam rezervacije...
+          </Text>
+        </View>
+      ) : activeBookings.length > 0 ? (
         <FlatList
           data={activeBookings}
           renderItem={renderBookingItem}

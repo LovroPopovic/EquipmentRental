@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, Modal, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, Alert, Modal, TextInput, Image, FlatList, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
 import { Calendar } from 'react-native-calendars';
 import { authService } from '../../services/AuthService';
-import { deleteEquipment } from '../../data/mockData';
+import { apiService } from '../../services/ApiService';
+import { useBooking } from '../../context/BookingContext';
 
-const DateRangePicker = ({ colors, onDateSelect, selectedDates, onClose, equipment }) => {
+const DateRangePicker = ({ colors, onDateSelect, selectedDates, onClose, equipment, onBookingCreated }) => {
   const [markedDates, setMarkedDates] = useState({});
   const [startDate, setStartDate] = useState(selectedDates.start || null);
   const [endDate, setEndDate] = useState(selectedDates.end || null);
@@ -187,20 +188,41 @@ const DateRangePicker = ({ colors, onDateSelect, selectedDates, onClose, equipme
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (startDate && endDate) {
       onDateSelect({ start: startDate, end: endDate });
-      
+
       Alert.alert(
         'Potvrda rezervacije',
         `Rezervirati ${equipment.name} od ${formatDateForDisplay(startDate)} do ${formatDateForDisplay(endDate)}?`,
         [
           { text: 'Odustani', style: 'cancel' },
-          { 
-            text: 'Rezerviraj', 
-            onPress: () => {
-              Alert.alert('Uspjeh', 'Oprema je uspješno rezervirana!');
-              onClose();
+          {
+            text: 'Rezerviraj',
+            onPress: async () => {
+              try {
+                console.log('📝 Creating booking...');
+                const bookingData = {
+                  equipmentId: equipment.id,
+                  startDate: startDate,
+                  endDate: endDate,
+                  notes: `Booking for ${equipment.name}`
+                };
+
+                console.log('📊 Booking data:', bookingData);
+
+                const response = await apiService.createBooking(bookingData);
+                console.log('✅ Booking created:', response);
+
+                // Trigger global refresh for all booking-related screens
+                onBookingCreated();
+
+                Alert.alert('Uspjeh', 'Oprema je uspješno rezervirana!');
+                onClose();
+              } catch (error) {
+                console.error('❌ Failed to create booking:', error);
+                Alert.alert('Greška', 'Nije moguće rezervirati opremu. Pokušajte ponovno.');
+              }
             }
           }
         ]
@@ -381,10 +403,62 @@ const DateRangePicker = ({ colors, onDateSelect, selectedDates, onClose, equipme
 
 const EquipmentDetailScreen = ({ route, navigation }) => {
   const colors = useColors();
-  const { equipment } = route.params;
+  const [equipment, setEquipment] = useState(route.params.equipment);
   const [selectedDates, setSelectedDates] = useState({ start: null, end: null });
   const [showCalendar, setShowCalendar] = useState(false);
   const [isCurrentUserOwner, setIsCurrentUserOwner] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userBooking, setUserBooking] = useState(null);
+  const { triggerRefresh, refreshTrigger } = useBooking();
+  const lastRefreshTrigger = useRef(0);
+
+  // Image gallery state
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [equipmentImages, setEquipmentImages] = useState([]);
+  const screenWidth = Dimensions.get('window').width;
+
+  // Refresh equipment data from API
+  const refreshEquipment = async () => {
+    try {
+      console.log('🔄 Refreshing equipment data...');
+      const response = await apiService.getEquipmentById(equipment.id);
+      setEquipment(response);
+
+      // Check if current user has a booking for this equipment
+      if (currentUser) {
+        const booking = response.bookings?.find(booking =>
+          booking.userId === currentUser.userId &&
+          ['PENDING', 'APPROVED', 'ACTIVE'].includes(booking.status)
+        );
+        setUserBooking(booking);
+        console.log('📋 User booking status:', booking ? booking.status : 'None');
+      }
+
+      console.log('✅ Equipment data refreshed');
+    } catch (error) {
+      console.error('❌ Failed to refresh equipment:', error);
+    }
+  };
+
+  // Load current user
+  const loadCurrentUser = async () => {
+    try {
+      const userInfo = await authService.getUserInfo();
+      if (userInfo) {
+        const userData = userInfo.backendUser || userInfo;
+        let userId = userData.id || userData.userId;
+
+        if (!userId && userData.sub) {
+          userId = userData.sub.startsWith('dev_') ? `mock_user_${userData.sub.split('_').pop()}` : userData.sub;
+        }
+
+        setCurrentUser({ ...userData, userId });
+        console.log('👤 Current user loaded:', userId);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load current user:', error);
+    }
+  };
 
   const getCategoryIcon = (category) => {
     switch (category) {
@@ -437,6 +511,75 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
     };
 
     checkOwnership();
+    loadCurrentUser();
+  }, [equipment]);
+
+  // Listen for booking changes and refresh equipment data
+  useEffect(() => {
+    if (refreshTrigger > 0 && refreshTrigger !== lastRefreshTrigger.current && currentUser) {
+      console.log('🔄 EquipmentDetailScreen: Refreshing due to booking change');
+      lastRefreshTrigger.current = refreshTrigger;
+      refreshEquipment();
+    }
+  }, [refreshTrigger, currentUser]);
+
+  // Process equipment images
+  useEffect(() => {
+    const processImages = () => {
+      const images = [];
+
+      // Handle equipment images - check if it's JSON array or single URL
+      if (equipment.imageUrl) {
+        try {
+          // Try to parse as JSON array first
+          const imageArray = JSON.parse(equipment.imageUrl);
+          if (Array.isArray(imageArray)) {
+            // Multiple images stored as JSON array
+            imageArray.forEach((uri, index) => {
+              images.push({
+                id: `image_${index}`,
+                uri,
+                title: `${equipment.name} ${index + 1}`
+              });
+            });
+          } else {
+            // Single image
+            images.push({
+              id: 'main',
+              uri: equipment.imageUrl,
+              title: 'Main Image'
+            });
+          }
+        } catch (error) {
+          // If JSON parsing fails, treat as single URL
+          images.push({
+            id: 'main',
+            uri: equipment.imageUrl,
+            title: 'Main Image'
+          });
+        }
+      }
+
+      // If no images found, add a fallback
+      if (images.length === 0) {
+        // Add a generic fallback image based on category
+        const fallbackImage = equipment.category?.toLowerCase().includes('kam')
+          ? 'https://images.unsplash.com/photo-1606983340077-bdc4ea88ec1b?w=600&h=600&fit=crop'
+          : equipment.category?.toLowerCase().includes('račun')
+          ? 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&h=600&fit=crop'
+          : 'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600&h=600&fit=crop';
+
+        images.push({
+          id: 'fallback',
+          uri: fallbackImage,
+          title: equipment.name
+        });
+      }
+
+      setEquipmentImages(images);
+    };
+
+    processImages();
   }, [equipment]);
 
   const handleBackPress = () => {
@@ -447,32 +590,6 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
     setShowCalendar(true);
   };
 
-  const handleEditEquipment = () => {
-    // Navigate to AddEquipmentScreen in edit mode
-    navigation.navigate('AddEquipment', { equipment, isEditMode: true });
-  };
-
-  const handleDeleteEquipment = () => {
-    Alert.alert(
-      'Obriši opremu',
-      'Jeste li sigurni da želite obrisati ovu opremu? Ova akcija se ne može poništiti.',
-      [
-        { text: 'Odustani', style: 'cancel' },
-        {
-          text: 'Obriši',
-          style: 'destructive',
-          onPress: () => {
-            deleteEquipment(equipment.id);
-            Alert.alert(
-              'Uspjeh',
-              'Oprema je uspješno obrisana.',
-              [{ text: 'U redu', onPress: () => navigation.goBack() }]
-            );
-          }
-        }
-      ]
-    );
-  };
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
@@ -489,27 +606,79 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View 
-          className="mx-4 mt-4 rounded-xl items-center justify-center"
-          style={{ 
-            backgroundColor: colors.surface,
-            aspectRatio: 1,
-            borderWidth: 1,
-            borderColor: colors.border 
-          }}
-        >
-          <Ionicons 
-            name={
-              equipment.category === 'Kamere' ? 'camera' :
-              equipment.category === 'Stativni' ? 'camera-outline' :
-              equipment.category === 'Tableti' ? 'tablet-portrait' :
-              equipment.category === 'Studijski' ? 'business' :
-              equipment.category === 'Računala' ? 'laptop' :
-              'hardware-chip'
-            }
-            size={80}
-            color={colors.textSecondary}
-          />
+        {/* Image Gallery */}
+        <View className="mx-4 mt-4">
+          {equipmentImages.length > 0 ? (
+            <View>
+              <FlatList
+                data={equipmentImages}
+                renderItem={({ item, index }) => (
+                  <View
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      width: screenWidth - 32,
+                      aspectRatio: 1,
+                      borderWidth: 1,
+                      borderColor: colors.border
+                    }}
+                  >
+                    <Image
+                      source={{ uri: item.uri }}
+                      className="w-full h-full"
+                      contentFit="cover"
+                    />
+                  </View>
+                )}
+                keyExtractor={(item) => item.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={({ nativeEvent }) => {
+                  const index = Math.round(nativeEvent.contentOffset.x / (screenWidth - 32));
+                  setCurrentImageIndex(index);
+                }}
+                scrollEventThrottle={16}
+              />
+
+              {/* Image indicators */}
+              {equipmentImages.length > 1 && (
+                <View className="flex-row justify-center mt-3">
+                  {equipmentImages.map((_, index) => (
+                    <View
+                      key={index}
+                      className="w-2 h-2 rounded-full mx-1"
+                      style={{
+                        backgroundColor: index === currentImageIndex ? colors.primary : colors.textSecondary + '30'
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          ) : (
+            <View
+              className="rounded-xl items-center justify-center"
+              style={{
+                backgroundColor: colors.surface,
+                aspectRatio: 1,
+                borderWidth: 1,
+                borderColor: colors.border
+              }}
+            >
+              <Ionicons
+                name={
+                  equipment.category === 'Kamere' ? 'camera' :
+                  equipment.category === 'Stativni' ? 'camera-outline' :
+                  equipment.category === 'Tableti' ? 'tablet-portrait' :
+                  equipment.category === 'Studijski' ? 'business' :
+                  equipment.category === 'Računala' ? 'laptop' :
+                  'hardware-chip'
+                }
+                size={80}
+                color={colors.textSecondary}
+              />
+            </View>
+          )}
         </View>
 
         <View className="p-4">
@@ -710,29 +879,7 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
 
       {equipment.available && (
         <View className="p-4" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-          {isCurrentUserOwner ? (
-            // Owner actions - Edit and Delete
-            <View className="flex-row">
-              <TouchableOpacity
-                onPress={handleEditEquipment}
-                className="flex-1 mr-2 py-4 rounded-xl"
-                style={{ backgroundColor: colors.primary }}
-              >
-                <Text className="text-center text-lg font-bold text-white">
-                  Uredi opremu
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleDeleteEquipment}
-                className="flex-1 ml-2 py-4 rounded-xl"
-                style={{ backgroundColor: '#ef4444' }}
-              >
-                <Text className="text-center text-lg font-bold text-white">
-                  Obriši
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : equipment.owner ? (
+          {equipment.owner ? (
             // Non-owner actions for owned equipment - Contact options
             <View>
               <View className="flex-row mb-4">
@@ -760,32 +907,31 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
                     E-pošta
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    navigation.navigate('Chat', {
-                      otherUser: equipment.owner,
-                      equipment
-                    });
-                  }}
-                  className="flex-1 ml-2 py-3 rounded-xl items-center"
-                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Ionicons name="chatbubble" size={20} color={colors.text} />
-                  <Text className="text-sm mt-1" style={{ color: colors.text }}>
-                    Poruka
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
           ) : (
             // University equipment - Book directly
             <TouchableOpacity
-              onPress={handleBookEquipment}
+              onPress={userBooking ? null : handleBookEquipment}
               className="py-4 rounded-xl"
-              style={{ backgroundColor: colors.primary }}
+              style={{
+                backgroundColor: userBooking ? colors.surface : colors.primary,
+                borderWidth: userBooking ? 1 : 0,
+                borderColor: userBooking ? colors.border : 'transparent'
+              }}
+              disabled={!!userBooking}
             >
-              <Text className="text-center text-lg font-bold text-white">
-                Rezerviraj opremu
+              <Text
+                className="text-center text-lg font-bold"
+                style={{
+                  color: userBooking ? colors.textSecondary : 'white'
+                }}
+              >
+                {userBooking
+                  ? `Moja rezervacija (${userBooking.status === 'PENDING' ? 'Čeka odobrenje' :
+                                         userBooking.status === 'APPROVED' ? 'Odobreno' : 'Aktivno'})`
+                  : 'Rezerviraj opremu'
+                }
               </Text>
             </TouchableOpacity>
           )}
@@ -805,6 +951,7 @@ const EquipmentDetailScreen = ({ route, navigation }) => {
             selectedDates={selectedDates}
             onClose={() => setShowCalendar(false)}
             equipment={equipment}
+            onBookingCreated={triggerRefresh}
           />
         </View>
       </Modal>

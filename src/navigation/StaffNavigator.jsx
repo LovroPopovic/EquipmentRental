@@ -10,12 +10,10 @@ import StudentManagementScreen from '../screens/staff/StudentManagementScreen';
 import EquipmentManagementScreen from '../screens/staff/EquipmentManagementScreen';
 import EquipmentHistoryScreen from '../screens/staff/EquipmentHistoryScreen';
 import StaffProfileScreen from '../screens/staff/StaffProfileScreen';
-import QRScannerScreen from '../screens/staff/QRScannerScreen';
+// import QRScannerScreen from '../screens/staff/QRScannerScreen'; // DISABLED
 import AddStaffEquipmentScreen from '../screens/staff/AddStaffEquipmentScreen';
 import EquipmentDetailScreen from '../screens/main/EquipmentDetailScreen';
 import BorrowingDetailScreen from '../screens/staff/BorrowingDetailScreen';
-import ChatScreen from '../screens/common/ChatScreen';
-import StaffMessagesListScreen from '../screens/staff/StaffMessagesListScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -25,10 +23,9 @@ const DashboardStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StaffDashboard" component={StaffDashboardScreen} />
-      <Stack.Screen name="QRScanner" component={QRScannerScreen} />
+      {/* <Stack.Screen name="QRScanner" component={QRScannerScreen} /> DISABLED */}
       <Stack.Screen name="EquipmentHistory" component={EquipmentHistoryScreen} />
       <Stack.Screen name="BorrowingDetail" component={BorrowingDetailScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
   );
 };
@@ -37,7 +34,6 @@ const StudentsStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StudentManagement" component={StudentManagementScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
     </Stack.Navigator>
   );
 };
@@ -56,14 +52,6 @@ const EquipmentStack = () => {
   );
 };
 
-const MessagesStack = () => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="StaffMessagesList" component={StaffMessagesListScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
-    </Stack.Navigator>
-  );
-};
 
 const ProfileStack = () => {
   return (
@@ -92,9 +80,6 @@ const StaffNavigator = () => {
               break;
             case 'Equipment':
               iconName = focused ? 'construct' : 'construct-outline';
-              break;
-            case 'Messages':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
             case 'Profile':
               iconName = focused ? 'person' : 'person-outline';
@@ -135,11 +120,6 @@ const StaffNavigator = () => {
         name="Equipment"
         component={EquipmentStack}
         options={{ tabBarLabel: 'Oprema' }}
-      />
-      <Tab.Screen
-        name="Messages"
-        component={MessagesStack}
-        options={{ tabBarLabel: 'Poruke' }}
       />
       <Tab.Screen
         name="Profile"

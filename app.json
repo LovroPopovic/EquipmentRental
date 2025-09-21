@@ -56,13 +56,7 @@
       }
     },
     "plugins": [
-      "expo-secure-store",
-      [
-        "./plugins/withAppAuth.js",
-        {
-          "appAuthRedirectScheme": "apuoprema"
-        }
-      ]
+      "expo-secure-store"
     ]
   }
 }

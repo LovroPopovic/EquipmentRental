@@ -1,10 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, TextInput, SafeAreaView, StatusBar, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useColors } from '../../hooks/useColors';
-import { mockEquipment, mockCategories } from '../../data/mockData';
+import { apiService } from '../../services/ApiService';
+import { authService } from '../../services/AuthService';
+import { useBooking } from '../../context/BookingContext';
 
-const EquipmentCard = ({ item, colors, onPress }) => (
+const EquipmentCard = ({ item, colors, onPress, currentUser }) => {
+  // Check if current user has a booking for this equipment
+  const userBooking = item.bookings?.find(booking =>
+    booking.userId === currentUser?.userId &&
+    ['PENDING', 'APPROVED', 'ACTIVE'].includes(booking.status)
+  );
+
+  // Determine status display
+  const getStatusInfo = () => {
+    if (userBooking) {
+      return {
+        available: false,
+        statusText: userBooking.status === 'PENDING' ? 'Moja rezervacija (Čeka odobrenje)' :
+                   userBooking.status === 'APPROVED' ? 'Moja rezervacija (Odobreno)' :
+                   'Moja rezervacija (Aktivno)',
+        color: userBooking.status === 'PENDING' ? '#F59E0B' : '#10B981'
+      };
+    } else {
+      // Check if other users have pending, approved, or active bookings
+      const otherUsersActiveBookings = item.bookings?.filter(booking =>
+        booking.userId !== currentUser?.userId &&
+        ['PENDING', 'APPROVED', 'ACTIVE'].includes(booking.status)
+      );
+
+      if (!item.available || (otherUsersActiveBookings && otherUsersActiveBookings.length > 0)) {
+        return {
+          available: false,
+          statusText: 'Rezervirano',
+          color: '#EF4444'
+        };
+      } else {
+        return {
+          available: true,
+          statusText: 'Dostupno',
+          color: '#10B981'
+        };
+      }
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
+  return (
   <TouchableOpacity
     onPress={() => onPress(item)}
     className="flex-1 m-2 rounded-xl overflow-hidden"
@@ -14,23 +59,49 @@ const EquipmentCard = ({ item, colors, onPress }) => (
       borderColor: colors.border 
     }}
   >
-    {/* Equipment Image Placeholder */}
-    <View 
+    {/* Equipment Image */}
+    <View
       className="aspect-square items-center justify-center"
       style={{ backgroundColor: colors.surface }}
     >
-      <Ionicons 
-        name={
-          item.category === 'Kamere' ? 'camera' :
-          item.category === 'Stativni' ? 'camera-outline' :
-          item.category === 'Tableti' ? 'tablet-portrait' :
-          item.category === 'Studijski' ? 'business' :
-          item.category === 'Računala' ? 'laptop' :
-          'hardware-chip'
+      {(() => {
+        // Get first image from JSON array or use single image
+        let imageUri = null;
+        if (item.imageUrl) {
+          try {
+            const imageArray = JSON.parse(item.imageUrl);
+            imageUri = Array.isArray(imageArray) ? imageArray[0] : item.imageUrl;
+          } catch {
+            imageUri = item.imageUrl;
+          }
         }
-        size={48}
-        color={colors.textSecondary}
-      />
+
+        return imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={{ width: '100%', height: '100%' }}
+            contentFit="cover"
+            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            transition={200}
+          />
+        ) : (
+          <Ionicons
+            name={
+              item.category === 'kamere' ? 'camera' :
+              item.category === 'stativni' ? 'camera-outline' :
+              item.category === 'tableti' ? 'tablet-portrait' :
+              item.category === 'studijski' ? 'business' :
+              item.category === 'računala' ? 'laptop' :
+              item.category === 'audio' ? 'headset' :
+              item.category === 'mreža' ? 'wifi' :
+              item.category === 'vr' ? 'glasses' :
+              'hardware-chip'
+            }
+            size={48}
+            color={colors.textSecondary}
+          />
+        );
+      })()}
     </View>
     
     {/* Equipment Info */}
@@ -55,13 +126,13 @@ const EquipmentCard = ({ item, colors, onPress }) => (
         <View className="flex-row items-center">
           <View
             className="w-2 h-2 rounded-full mr-2"
-            style={{ backgroundColor: item.available ? '#10B981' : '#F59E0B' }}
+            style={{ backgroundColor: statusInfo.color }}
           />
           <Text
             className="text-xs"
-            style={{ color: item.available ? '#10B981' : '#F59E0B' }}
+            style={{ color: statusInfo.color }}
           >
-            {item.available ? 'Dostupno' : 'Rezervirano'}
+            {statusInfo.statusText}
           </Text>
         </View>
       </View>
@@ -102,27 +173,121 @@ const EquipmentCard = ({ item, colors, onPress }) => (
       </Text>
     </View>
   </TouchableOpacity>
-);
+  );
+};
 
 const HomeScreen = ({ navigation }) => {
   const colors = useColors();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredEquipment, setFilteredEquipment] = useState(mockEquipment);
+  const [equipment, setEquipment] = useState([]);
+  const [filteredEquipment, setFilteredEquipment] = useState([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [filters, setFilters] = useState({
     categories: [],
     availability: 'all', // 'all', 'available', 'borrowed'
     hasOwner: 'all' // 'all', 'owned', 'university'
   });
+  const { refreshTrigger } = useBooking();
+
+  // Generate categories dynamically from equipment data
+  const getAvailableCategories = () => {
+    const categorySet = new Set();
+    equipment.forEach(item => {
+      if (item.category) {
+        categorySet.add(item.category);
+      }
+    });
+
+    return Array.from(categorySet).map((categoryName, index) => ({
+      id: index + 1,
+      name: categoryName,
+      icon: getCategoryIcon(categoryName)
+    }));
+  };
+
+  // Get appropriate icon for category
+  const getCategoryIcon = (categoryName) => {
+    const name = categoryName.toLowerCase();
+    if (name.includes('camera') || name.includes('kamera')) return 'camera';
+    if (name.includes('laptop') || name.includes('računal')) return 'laptop';
+    if (name.includes('tablet')) return 'tablet-portrait';
+    if (name.includes('studio')) return 'business';
+    return 'hardware-chip';
+  };
+
+  // Load equipment data from API
+  const loadEquipment = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      console.log('Loading equipment from backend API...');
+      const response = await apiService.getEquipment();
+
+      console.log('Equipment loaded:', response.data?.length || 0, 'items');
+
+      const equipmentData = response.data || [];
+      setEquipment(equipmentData);
+      setFilteredEquipment(equipmentData);
+
+    } catch (err) {
+      console.error('Failed to load equipment:', err.message);
+      setError(err.message);
+
+      // No fallback - show error state
+      setEquipment([]);
+      setFilteredEquipment([]);
+
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadCurrentUser = async () => {
+    try {
+      const userInfo = await authService.getUserInfo();
+      if (userInfo) {
+        // Use same logic as other screens to get userId
+        const userData = userInfo.backendUser || userInfo;
+        let userId = userData.id || userData.userId;
+
+        // Convert mock user format to match database
+        if (!userId && userData.sub) {
+          userId = userData.sub.startsWith('dev_') ? `mock_user_${userData.sub.split('_').pop()}` : userData.sub;
+        }
+
+        setCurrentUser({ ...userData, userId });
+        console.log('Current user loaded for equipment:', userId);
+      }
+    } catch (error) {
+      console.error('Failed to load current user:', error);
+    }
+  };
+
+  // Load equipment and user on component mount
+  useEffect(() => {
+    loadEquipment();
+    loadCurrentUser();
+  }, []);
+
+  // Listen for booking changes and refresh equipment
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('HomeScreen: Refreshing due to booking change');
+      loadEquipment();
+    }
+  }, [refreshTrigger]);
 
   const applyFilters = async (query = searchQuery, currentFilters = filters) => {
     setIsLoading(true);
 
-    // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // Simulate async operation for better UX
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-    let filtered = mockEquipment;
+    let filtered = equipment;
 
     // Apply search query
     if (query.trim()) {
@@ -172,7 +337,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const renderEquipmentItem = ({ item }) => (
-    <EquipmentCard item={item} colors={colors} onPress={handleEquipmentPress} />
+    <EquipmentCard item={item} colors={colors} onPress={handleEquipmentPress} currentUser={currentUser} />
   );
 
   const handleCategoryToggle = (categoryName) => {
@@ -233,7 +398,7 @@ const HomeScreen = ({ navigation }) => {
                 Kategorije
               </Text>
               <View className="flex-row flex-wrap">
-                {mockCategories.map(category => (
+                {getAvailableCategories().map(category => (
                   <TouchableOpacity
                     key={category.id}
                     onPress={() => handleCategoryToggle(category.name)}
@@ -396,20 +561,6 @@ const HomeScreen = ({ navigation }) => {
             <Ionicons name="options" size={20} color={colors.text} />
           </TouchableOpacity>
 
-          {/* Add Item Button */}
-          <TouchableOpacity
-            onPress={() => {
-              navigation.navigate('AddEquipment');
-            }}
-            className="items-center justify-center px-4 rounded-xl"
-            style={{
-              backgroundColor: colors.primary,
-              height: 48,
-              width: 48
-            }}
-          >
-            <Ionicons name="add" size={20} color="white" />
-          </TouchableOpacity>
         </View>
       </View>
 

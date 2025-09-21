@@ -53,10 +53,10 @@ const ActivityCard = ({ activity, onPress, variant = 'default' }) => {
           </View>
           <View className="flex-1">
             <Text className="font-medium text-sm" style={{ color: colors.text }}>
-              {activity.equipment}
+              {activity.equipment?.name || activity.equipment || 'Unknown Equipment'}
             </Text>
             <Text className="text-xs" style={{ color: colors.textSecondary }}>
-              {activity.student} • {activity.date || activity.borrowDate}
+              {activity.user?.name || activity.student || 'Unknown Student'} • {activity.date ? new Date(activity.date).toLocaleDateString('hr-HR') : (activity.borrowDate || 'N/A')}
             </Text>
           </View>
         </View>
@@ -83,13 +83,13 @@ const ActivityCard = ({ activity, onPress, variant = 'default' }) => {
         </View>
         <View className="flex-1">
           <Text className="font-semibold mb-1" style={{ color: colors.text }}>
-            {activity.equipment}
+            {activity.equipment?.name || activity.equipment || 'Unknown Equipment'}
           </Text>
           <Text className="text-sm mb-1" style={{ color: colors.textSecondary }}>
-            {getStatusText(activity.type || activity.status)} • {activity.student}
+            {getStatusText(activity.type || activity.status)} • {activity.user?.name || activity.student || 'Unknown Student'}
           </Text>
           <Text className="text-xs" style={{ color: colors.textSecondary }}>
-            {activity.date || activity.borrowDate}
+            {activity.date ? new Date(activity.date).toLocaleDateString('hr-HR') : (activity.borrowDate || 'N/A')}
           </Text>
           {activity.notes && (
             <Text className="text-xs mt-2 italic" style={{ color: colors.textSecondary }}>

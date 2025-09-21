@@ -1,66 +1,139 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, FlatList, Alert, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, FlatList, Alert, Switch, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
 import { useTheme } from '../../context/ThemeContext';
 import { authService } from '../../services/AuthService';
+import { apiService } from '../../services/ApiService';
+import { useBooking } from '../../context/BookingContext';
 
 const ProfileScreen = ({ navigation }) => {
   const colors = useColors();
   const { theme, toggleTheme, isDark } = useTheme();
 
-  // Mock user data (would come from auth service)
-  const [user] = useState({
-    name: 'Ana Korisnik',
-    email: 'ana.korisnik@apu.hr',
-    userId: '2021001234',
-    department: 'Digitalni dizajn',
-    joinDate: '2021-09-15'
-  });
+  // Real user data from backend
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { refreshTrigger } = useBooking();
 
-  // Mock reservation history
-  const [reservations] = useState([
-    {
-      id: 1,
-      equipmentName: 'Wacom CTL-472',
-      category: 'Tableti',
-      startDate: '2024-09-15',
-      endDate: '2024-09-20',
-      status: 'active', // active, completed, cancelled
-      owner: 'Prof. Ivo Kovač',
-      location: 'Grafička sala'
-    },
-    {
-      id: 2,
-      equipmentName: 'Canon EOS 2000D',
-      category: 'Kamere',
-      startDate: '2024-09-10',
-      endDate: '2024-09-14',
-      status: 'completed',
-      owner: 'Prof. Tomislav Babić',
-      location: 'Studio A'
-    },
-    {
-      id: 3,
-      equipmentName: 'Nikon D5600',
-      category: 'Kamere',
-      startDate: '2024-09-05',
-      endDate: '2024-09-08',
-      status: 'completed',
-      owner: null, // University equipment
-      location: 'Studio B'
-    },
-    {
-      id: 4,
-      equipmentName: 'MacBook Pro',
-      category: 'Računala',
-      startDate: '2024-08-28',
-      endDate: '2024-09-01',
-      status: 'cancelled',
-      owner: 'Prof. Sandra Miletić',
-      location: 'IT sala'
+  // Load user profile data
+  useEffect(() => {
+    loadUserProfile();
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      setIsLoading(true);
+
+      // Get current user data (includes both AAI and backend data)
+      const currentUser = await authService.getUserInfo();
+
+      if (currentUser?.backendUser) {
+        // Use backend user data if available
+        const backendUser = currentUser.backendUser;
+        setUser({
+          name: `${backendUser.firstName || ''} ${backendUser.lastName || ''}`.trim() || 'User',
+          email: backendUser.email || 'No email',
+          userId: backendUser.id, // Use backend user ID for API calls
+          role: backendUser.role || 'STUDENT',
+          joinDate: backendUser.createdAt ? new Date(backendUser.createdAt).toLocaleDateString('hr-HR') : 'N/A'
+        });
+        console.log('👤 Profile loaded:', backendUser);
+      } else if (currentUser) {
+        // Fallback to AAI data
+        const userId = currentUser.userId || `mock_user_${currentUser.sub?.split('_').pop()}` || 'unknown';
+        console.log('👤 Available user fields:', Object.keys(currentUser));
+        console.log('👤 Using userId:', userId);
+
+        setUser({
+          name: currentUser.name || 'User',
+          email: currentUser.email || 'No email',
+          userId: userId,
+          role: 'STUDENT',
+          joinDate: 'N/A'
+        });
+        console.log('👤 Profile loaded from AAI fallback');
+      } else {
+        // No user data available
+        setUser({
+          name: 'User',
+          email: 'No email',
+          userId: 'unknown',
+          role: 'STUDENT',
+          joinDate: 'N/A'
+        });
+        console.log('👤 No user data available');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load user profile:', error);
+      // Keep mock data as ultimate fallback
+      setUser({
+        name: 'User',
+        email: 'user@apu.hr',
+        userId: 'unknown',
+        role: 'STUDENT',
+        joinDate: 'N/A'
+      });
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  };
+
+  // Real reservation history from backend
+  const [reservations, setReservations] = useState([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+
+  // Load user's booking history
+  const loadReservationHistory = async () => {
+    if (!user?.userId) return;
+
+    try {
+      console.log('🔄 Loading reservation history...');
+      console.log('📍 Sending user ID to backend:', user.userId);
+      const response = await apiService.getUserBookings(user.userId);
+      const allBookings = response.data || [];
+
+      // Transform backend data to display format (include ALL bookings for history)
+      const transformedBookings = allBookings.map(booking => ({
+        id: booking.id,
+        equipmentName: booking.equipment?.name || 'Unknown Equipment',
+        category: booking.equipment?.category || 'Unknown',
+        startDate: booking.startDate,
+        endDate: booking.endDate,
+        status: booking.status?.toLowerCase() === 'cancelled' ? 'cancelled' :
+                booking.status?.toLowerCase() === 'completed' ? 'completed' :
+                booking.status?.toLowerCase() || 'pending',
+        owner: booking.equipment?.owner || null,
+        location: booking.equipment?.location || 'Unknown Location'
+      }));
+
+      setReservations(transformedBookings);
+      console.log('📋 Reservation history loaded:', transformedBookings.length);
+    } catch (error) {
+      console.error('❌ Failed to load reservation history:', error);
+      setReservations([]); // Empty array on error, no fallback
+    }
+  };
+
+  // Load reservations when user data is available
+  useEffect(() => {
+    if (user?.userId) {
+      loadReservationHistory();
+    }
+  }, [user]);
+
+  // Listen for booking changes and refresh reservation history
+  useEffect(() => {
+    if (refreshTrigger > 0 && user?.userId) {
+      console.log('🔄 ProfileScreen: Refreshing reservation history due to booking change, trigger:', refreshTrigger);
+      const timeout = setTimeout(() => {
+        loadReservationHistory();
+      }, 500); // Small delay to ensure backend has processed the change
+
+      return () => clearTimeout(timeout);
+    }
+  }, [refreshTrigger, user?.userId]);
+
 
   const handleLogout = async () => {
     Alert.alert(
@@ -208,13 +281,13 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             <View className="flex-1">
               <Text className="text-xl font-bold mb-1" style={{ color: colors.text }}>
-                {user.name}
+                {user?.name || 'Loading...'}
               </Text>
               <Text className="text-sm mb-1" style={{ color: colors.textSecondary }}>
-                {user.email}
+                {user?.email || 'Loading...'}
               </Text>
               <Text className="text-sm" style={{ color: colors.textSecondary }}>
-                {user.userId}
+                {user?.userId || 'Loading...'}
               </Text>
             </View>
           </View>
@@ -225,7 +298,7 @@ const ProfileScreen = ({ navigation }) => {
                 Odsjek:
               </Text>
               <Text className="text-sm font-medium" style={{ color: colors.text }}>
-                {user.department}
+                {user?.department || user?.role || 'Loading...'}
               </Text>
             </View>
             <View className="flex-row justify-between">
@@ -233,7 +306,7 @@ const ProfileScreen = ({ navigation }) => {
                 Član od:
               </Text>
               <Text className="text-sm font-medium" style={{ color: colors.text }}>
-                {formatDate(user.joinDate)}
+                {user?.joinDate ? formatDate(user.joinDate) : 'Loading...'}
               </Text>
             </View>
           </View>
@@ -292,11 +365,22 @@ const ProfileScreen = ({ navigation }) => {
           </Text>
           {reservationHistory.length > 0 ? (
             <View className="px-4">
-              {reservationHistory.map(item => (
+              {(showAllHistory ? reservationHistory : reservationHistory.slice(0, 3)).map(item => (
                 <View key={item.id}>
                   {renderReservationItem({ item })}
                 </View>
               ))}
+              {reservationHistory.length > 3 && (
+                <TouchableOpacity
+                  onPress={() => setShowAllHistory(!showAllHistory)}
+                  className="mt-3 py-3 rounded-lg items-center"
+                  style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                >
+                  <Text className="text-sm font-medium" style={{ color: colors.primary }}>
+                    {showAllHistory ? 'Prikaži manje' : `Prikaži sve (${reservationHistory.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View className="items-center py-8 px-4">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,15 @@ import {
   StatusBar,
   ScrollView,
   TextInput,
-  Alert
+  Alert,
+  Modal,
+  FlatList,
+  Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '../../hooks/useColors';
-import { mockCategories, addEquipment, updateEquipment } from '../../data/mockData';
+import { apiService } from '../../services/ApiService';
 
 const AddStaffEquipmentScreen = ({ navigation, route }) => {
   const colors = useColors();
@@ -31,6 +35,145 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState([
+    'laptop', 'camera', 'tablet', 'audio', 'video', 'lighting', 'tripod', 'monitor', 'projector', 'printer'
+  ]);
+  const [newCategoryText, setNewCategoryText] = useState('');
+  const [equipmentImages, setEquipmentImages] = useState([]);
+
+  useEffect(() => {
+    loadExistingCategories();
+
+    // Load existing images if in edit mode
+    if (isEditMode && editingEquipment?.imageUrl) {
+      setEquipmentImages([{
+        uri: editingEquipment.imageUrl,
+        id: 'existing'
+      }]);
+    }
+  }, []);
+
+  const loadExistingCategories = async () => {
+    try {
+      const response = await apiService.getEquipment();
+      const equipment = response.data || [];
+
+      // Extract unique categories from existing equipment
+      const existingCategories = [...new Set(equipment.map(item => item.category))]
+        .filter(Boolean)
+        .sort();
+
+      // Merge with predefined categories
+      const allCategories = [...new Set([...availableCategories, ...existingCategories])].sort();
+      setAvailableCategories(allCategories);
+    } catch (error) {
+      console.log('Could not load existing categories:', error);
+    }
+  };
+
+  const handleSelectCategory = (category) => {
+    setFormData(prev => ({ ...prev, category }));
+    setShowCategoryPicker(false);
+  };
+
+  const handleAddNewCategory = () => {
+    if (!newCategoryText.trim()) {
+      Alert.alert('Greška', 'Molimo unesite naziv kategorije.');
+      return;
+    }
+
+    const newCategory = newCategoryText.trim().toLowerCase();
+
+    if (availableCategories.includes(newCategory)) {
+      Alert.alert('Greška', 'Ova kategorija već postoji.');
+      return;
+    }
+
+    setAvailableCategories(prev => [...prev, newCategory].sort());
+    setFormData(prev => ({ ...prev, category: newCategory }));
+    setNewCategoryText('');
+    setShowCategoryPicker(false);
+
+    Alert.alert('Uspjeh', `Kategorija "${newCategory}" je dodana!`);
+  };
+
+  const requestPermissions = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Dozvola potrebna', 'Potrebna je dozvola za pristup galeriji slika.');
+      return false;
+    }
+    return true;
+  };
+
+  const pickImage = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        aspect: [4, 3],
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets) {
+        const newImages = result.assets.map(asset => ({
+          uri: asset.uri,
+          id: Date.now() + Math.random()
+        }));
+        setEquipmentImages(prev => [...prev, ...newImages]);
+      }
+    } catch (error) {
+      Alert.alert('Greška', 'Došlo je do greške pri odabiru slika.');
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Dozvola potrebna', 'Potrebna je dozvola za pristup kameri.');
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        aspect: [4, 3],
+        allowsEditing: true,
+      });
+
+      if (!result.canceled && result.assets) {
+        const newImage = {
+          uri: result.assets[0].uri,
+          id: Date.now()
+        };
+        setEquipmentImages(prev => [...prev, newImage]);
+      }
+    } catch (error) {
+      Alert.alert('Greška', 'Došlo je do greške pri snimanju slike.');
+    }
+  };
+
+  const removeImage = (imageId) => {
+    setEquipmentImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Dodaj sliku',
+      'Odaberite opciju',
+      [
+        { text: 'Odustani', style: 'cancel' },
+        { text: 'Galerija', onPress: pickImage },
+        { text: 'Kamera', onPress: takePhoto }
+      ]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.category || !formData.location.trim()) {
@@ -42,16 +185,17 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
 
     try {
       if (isEditMode) {
-        // Update existing equipment with staff-specific fields
+        // Update existing equipment
         const updatedData = {
-          ...formData,
           name: formData.name.trim(),
+          category: formData.category.trim(),
           description: formData.description.trim(),
           location: formData.location.trim(),
-          notes: formData.notes.trim()
+          // qrCode: formData.qrCode.trim() || null, // DISABLED
+          imageUrl: equipmentImages.length > 0 ? equipmentImages[0].uri : editingEquipment?.imageUrl || null
         };
 
-        updateEquipment(editingEquipment.id, updatedData);
+        await apiService.updateEquipment(editingEquipment.id, updatedData);
 
         Alert.alert(
           'Uspjeh',
@@ -59,25 +203,17 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
           [{ text: 'U redu', onPress: () => navigation.goBack() }]
         );
       } else {
-        // Create new equipment with staff-specific fields
+        // Create new equipment
         const equipmentPayload = {
-          id: Date.now(),
           name: formData.name.trim(),
-          category: formData.category,
+          category: formData.category.trim(),
           description: formData.description.trim(),
           location: formData.location.trim(),
-          imageUrl: null,
-          available: true,
-          borrower: null,
-          owner: null, // University equipment
-          qrCode: formData.qrCode.trim() || `QR_${Date.now()}`,
-          serialNumber: formData.serialNumber.trim(),
-          purchaseDate: formData.purchaseDate.trim(),
-          condition: formData.condition,
-          notes: formData.notes.trim()
+          // qrCode: formData.qrCode.trim() || null, // DISABLED
+          imageUrl: equipmentImages.length > 0 ? equipmentImages[0].uri : null
         };
 
-        addEquipment(equipmentPayload);
+        await apiService.createEquipment(equipmentPayload);
 
         Alert.alert(
           'Uspjeh',
@@ -92,10 +228,13 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
     }
   };
 
+  // QR Code generation - DISABLED
+  /*
   const generateQRCode = () => {
     const qrCode = `APU_${Date.now()}`;
     setFormData(prev => ({ ...prev, qrCode }));
   };
+  */
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
@@ -145,6 +284,7 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
               Kategorija *
             </Text>
             <TouchableOpacity
+              onPress={() => setShowCategoryPicker(true)}
               className="p-4 rounded-xl flex-row items-center justify-between"
               style={{
                 backgroundColor: colors.surface,
@@ -202,12 +342,62 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
             />
           </View>
 
+          {/* Equipment Images */}
+          <View className="mb-6">
+            <Text className="text-sm font-medium mb-3" style={{ color: colors.text }}>
+              Slike opreme
+            </Text>
+
+            {/* Add Image Button */}
+            <TouchableOpacity
+              onPress={showImageOptions}
+              className="mb-3 p-4 rounded-xl border-2 border-dashed items-center justify-center"
+              style={{
+                borderColor: colors.border,
+                backgroundColor: colors.surface + '50'
+              }}
+            >
+              <Ionicons name="camera" size={32} color={colors.textSecondary} />
+              <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+                Dodaj slike opreme
+              </Text>
+              <Text className="text-xs mt-1" style={{ color: colors.textSecondary }}>
+                Dotaknite za odabir iz galerije ili snimanje
+              </Text>
+            </TouchableOpacity>
+
+            {/* Image Grid */}
+            {equipmentImages.length > 0 && (
+              <View className="flex-row flex-wrap">
+                {equipmentImages.map((image, index) => (
+                  <View key={image.id} className="w-1/3 p-1">
+                    <View className="relative">
+                      <Image
+                        source={{ uri: image.uri }}
+                        className="w-full aspect-square rounded-lg"
+                        resizeMode="cover"
+                      />
+                      <TouchableOpacity
+                        onPress={() => removeImage(image.id)}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full items-center justify-center"
+                        style={{ backgroundColor: '#ef4444' }}
+                      >
+                        <Ionicons name="close" size={14} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
           {/* Technical Details */}
           <Text className="text-lg font-semibold mb-4" style={{ color: colors.text }}>
             Tehnički detalji
           </Text>
 
-          {/* QR Code */}
+          {/* QR Code - DISABLED */}
+          {/*
           <View className="mb-4">
             <Text className="text-sm font-medium mb-2" style={{ color: colors.text }}>
               QR Kod
@@ -235,6 +425,7 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
           </View>
+          */}
 
           {/* Serial Number */}
           <View className="mb-4">
@@ -355,6 +546,94 @@ const AddStaffEquipmentScreen = ({ navigation, route }) => {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Category Picker Modal */}
+      <Modal
+        visible={showCategoryPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCategoryPicker(false)}
+      >
+        <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View
+            className="rounded-t-3xl p-6"
+            style={{ backgroundColor: colors.background, maxHeight: '80%' }}
+          >
+            {/* Header */}
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-lg font-semibold" style={{ color: colors.text }}>
+                Odaberite kategoriju
+              </Text>
+              <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Add New Category */}
+            <View className="mb-4 p-4 rounded-xl" style={{ backgroundColor: colors.surface }}>
+              <Text className="text-sm font-medium mb-2" style={{ color: colors.text }}>
+                Dodaj novu kategoriju
+              </Text>
+              <View className="flex-row">
+                <TextInput
+                  placeholder="Naziv nove kategorije"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newCategoryText}
+                  onChangeText={setNewCategoryText}
+                  className="flex-1 p-3 rounded-lg text-base mr-2"
+                  style={{
+                    backgroundColor: colors.background,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.text
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={handleAddNewCategory}
+                  className="px-4 py-3 rounded-lg"
+                  style={{ backgroundColor: colors.primary }}
+                >
+                  <Ionicons name="add" size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Existing Categories */}
+            <Text className="text-sm font-medium mb-3" style={{ color: colors.text }}>
+              Postojeće kategorije
+            </Text>
+            <FlatList
+              data={availableCategories}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => handleSelectCategory(item)}
+                  className="p-4 rounded-xl mb-2 flex-row items-center justify-between"
+                  style={{
+                    backgroundColor: formData.category === item ? colors.primary + '20' : colors.surface,
+                    borderWidth: 1,
+                    borderColor: formData.category === item ? colors.primary : colors.border
+                  }}
+                >
+                  <Text
+                    className="text-base capitalize"
+                    style={{
+                      color: formData.category === item ? colors.primary : colors.text,
+                      fontWeight: formData.category === item ? '600' : 'normal'
+                    }}
+                  >
+                    {item}
+                  </Text>
+                  {formData.category === item && (
+                    <Ionicons name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

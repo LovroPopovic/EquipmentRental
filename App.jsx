@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import './global.css';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { BookingProvider } from './src/context/BookingContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { authService } from './src/services/AuthService';
 
@@ -50,12 +51,14 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <AppNavigator
-        isAuthenticated={isAuthenticated}
-        userRole={userRole}
-        onAuthChange={checkAuthStatus}
-      />
-      <StatusBar style="auto" />
+      <BookingProvider>
+        <AppNavigator
+          isAuthenticated={isAuthenticated}
+          userRole={userRole}
+          onAuthChange={checkAuthStatus}
+        />
+        <StatusBar style="auto" />
+      </BookingProvider>
     </ThemeProvider>
   );
 }

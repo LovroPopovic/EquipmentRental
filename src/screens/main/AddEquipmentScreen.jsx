@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '../../hooks/useColors';
-import { mockCategories, addEquipment, updateEquipment } from '../../data/mockData';
+import { apiService } from '../../services/ApiService';
 import { authService } from '../../services/AuthService';
 
 const AddEquipmentScreen = ({ navigation, route }) => {

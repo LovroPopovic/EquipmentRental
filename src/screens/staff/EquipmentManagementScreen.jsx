@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   SafeAreaView,
   StatusBar,
   FlatList,
-  TextInput
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useColors } from '../../hooks/useColors';
-import { mockEquipment } from '../../data/mockData';
+import { apiService } from '../../services/ApiService';
+import { useFocusEffect } from '@react-navigation/native';
 
 const EquipmentCard = ({ item, colors, onPress, onEdit }) => (
   <TouchableOpacity
@@ -19,15 +22,51 @@ const EquipmentCard = ({ item, colors, onPress, onEdit }) => (
     style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
   >
     <View className="flex-row items-start">
-      <View
-        className="w-12 h-12 rounded-xl items-center justify-center mr-4"
-        style={{ backgroundColor: item.available ? '#22c55e' : '#ef4444' }}
-      >
-        <Ionicons
-          name={item.available ? 'checkmark' : 'time'}
-          size={20}
-          color="white"
-        />
+      {/* Equipment Image */}
+      <View className="w-12 h-12 rounded-xl mr-4 overflow-hidden relative">
+        {(() => {
+          let imageUri = null;
+          if (item.imageUrl) {
+            try {
+              const imageArray = JSON.parse(item.imageUrl);
+              imageUri = Array.isArray(imageArray) ? imageArray[0] : item.imageUrl;
+            } catch {
+              imageUri = item.imageUrl;
+            }
+          }
+
+          return imageUri ? (
+            <>
+              <Image
+                source={{ uri: imageUri }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+              />
+              {/* Status Indicator Overlay */}
+              <View
+                className="absolute top-0 right-0 w-4 h-4 rounded-full items-center justify-center"
+                style={{ backgroundColor: item.available ? '#22c55e' : '#ef4444' }}
+              >
+                <Ionicons
+                  name={item.available ? 'checkmark' : 'time'}
+                  size={10}
+                  color="white"
+                />
+              </View>
+            </>
+          ) : (
+            <View
+              className="w-full h-full items-center justify-center"
+              style={{ backgroundColor: item.available ? '#22c55e' : '#ef4444' }}
+            >
+              <Ionicons
+                name={item.available ? 'checkmark' : 'time'}
+                size={20}
+                color="white"
+              />
+            </View>
+          );
+        })()}
       </View>
       <View className="flex-1">
         <Text className="font-semibold text-base mb-1" style={{ color: colors.text }}>
@@ -60,8 +99,55 @@ const EquipmentManagementScreen = ({ navigation, route }) => {
   const colors = useColors();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState(route?.params?.filterStatus || 'all'); // 'all', 'available', 'borrowed'
+  const [equipment, setEquipment] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredEquipment = mockEquipment.filter(item => {
+  useEffect(() => {
+    loadEquipment();
+  }, []);
+
+  // Refresh equipment when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadEquipment();
+    }, [])
+  );
+
+  const loadEquipment = async () => {
+    try {
+      setIsLoading(true);
+      console.log('Loading equipment for staff...');
+
+      const response = await apiService.getEquipment();
+      const equipmentData = response.data || [];
+
+      // Process equipment data to include borrower information
+      const processedEquipment = equipmentData.map(item => {
+        // Find active booking (if any)
+        const activeBooking = item.bookings?.find(booking =>
+          booking.status === 'ACTIVE' || booking.status === 'APPROVED'
+        );
+
+        return {
+          ...item,
+          borrower: activeBooking ? {
+            name: `${activeBooking.user.firstName} ${activeBooking.user.lastName}`,
+            id: activeBooking.user.id
+          } : null
+        };
+      });
+
+      setEquipment(processedEquipment);
+      console.log('Equipment loaded for staff:', equipmentData.length);
+    } catch (error) {
+      console.error('Failed to load equipment:', error);
+      setEquipment([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredEquipment = equipment.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.category.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -95,9 +181,9 @@ const EquipmentManagementScreen = ({ navigation, route }) => {
   );
 
   const getStatusCount = (status) => {
-    if (status === 'all') return mockEquipment.length;
-    if (status === 'available') return mockEquipment.filter(item => item.available).length;
-    if (status === 'borrowed') return mockEquipment.filter(item => !item.available).length;
+    if (status === 'all') return equipment.length;
+    if (status === 'available') return equipment.filter(item => item.available).length;
+    if (status === 'borrowed') return equipment.filter(item => !item.available).length;
     return 0;
   };
 
@@ -113,7 +199,7 @@ const EquipmentManagementScreen = ({ navigation, route }) => {
               Upravljanje opremom
             </Text>
             <Text className="text-sm mt-1" style={{ color: colors.textSecondary }}>
-              {mockEquipment.length} ukupno oprema
+              {equipment.length} ukupno oprema
             </Text>
           </View>
           <TouchableOpacity
@@ -193,13 +279,54 @@ const EquipmentManagementScreen = ({ navigation, route }) => {
       </View>
 
       {/* Equipment List */}
-      <FlatList
-        data={filteredEquipment}
-        renderItem={renderEquipmentItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 24, paddingTop: 0 }}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+            Učitavam opremu...
+          </Text>
+        </View>
+      ) : filteredEquipment.length > 0 ? (
+        <FlatList
+          data={filteredEquipment}
+          renderItem={renderEquipmentItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={{ padding: 24, paddingTop: 0 }}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center px-4">
+          <View
+            className="w-16 h-16 rounded-full items-center justify-center mb-4"
+            style={{ backgroundColor: colors.surface }}
+          >
+            <Ionicons name="construct-outline" size={32} color={colors.textSecondary} />
+          </View>
+          <Text
+            className="text-lg font-semibold mb-2 text-center"
+            style={{ color: colors.text }}
+          >
+            Nema opreme
+          </Text>
+          <Text
+            className="text-sm text-center mb-4"
+            style={{ color: colors.textSecondary }}
+          >
+            {searchQuery ? 'Pokušajte s drugim pojmovima za pretraživanje.' : 'Dodajte opremu da biste počeli upravljati njome.'}
+          </Text>
+          {!searchQuery && (
+            <TouchableOpacity
+              onPress={handleAddEquipment}
+              className="px-6 py-3 rounded-lg"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text className="text-base font-semibold text-white">
+                Dodaj opremu
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 };

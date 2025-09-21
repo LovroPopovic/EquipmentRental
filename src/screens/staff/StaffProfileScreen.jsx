@@ -6,11 +6,15 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
-  Alert
+  Alert,
+  Switch,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
+import { useTheme } from '../../context/ThemeContext';
 import { authService } from '../../services/AuthService';
+import { apiService } from '../../services/ApiService';
 
 const ProfileItem = ({ icon, title, subtitle, onPress, colors }) => (
   <TouchableOpacity
@@ -54,18 +58,49 @@ const StatItem = ({ title, value, colors }) => (
 
 const StaffProfileScreen = ({ navigation }) => {
   const colors = useColors();
+  const { theme, toggleTheme, isDark } = useTheme();
   const [userInfo, setUserInfo] = useState(null);
+  const [stats, setStats] = useState({
+    totalEquipment: 0,
+    activeBookings: 0,
+    totalStudents: 0,
+    pendingRequests: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadUserInfo();
+    loadUserData();
   }, []);
 
-  const loadUserInfo = async () => {
+  const loadUserData = async () => {
     try {
+      setIsLoading(true);
+
+      // Load user info
       const info = await authService.getUserInfo();
-      setUserInfo(info);
+      setUserInfo(info?.backendUser || info);
+
+      // Load dashboard stats for profile
+      const statsResponse = await apiService.getDashboardStats();
+      const dashboardStats = statsResponse.data || {};
+
+      setStats({
+        totalEquipment: dashboardStats.equipment?.total || 0,
+        activeBookings: dashboardStats.bookings?.active || 0,
+        totalStudents: dashboardStats.users?.students || 0,
+        pendingRequests: dashboardStats.bookings?.pending || 0
+      });
+
     } catch (error) {
-      console.error('Error loading user info:', error);
+      console.error('Error loading staff profile data:', error);
+      setStats({
+        totalEquipment: 0,
+        activeBookings: 0,
+        totalStudents: 0,
+        pendingRequests: 0
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -90,92 +125,174 @@ const StaffProfileScreen = ({ navigation }) => {
     );
   };
 
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('hr-HR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.background }}>
       <StatusBar backgroundColor={colors.background} barStyle={colors.statusBarStyle} />
 
-      {/* Header */}
-      <View className="px-6 py-4" style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
-        <Text className="text-2xl font-bold" style={{ color: colors.text }}>
-          Profil
-        </Text>
-        <Text className="text-sm mt-1" style={{ color: colors.textSecondary }}>
-          Upravljanje računa
-        </Text>
-      </View>
-
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {/* User Info */}
-        <View className="p-6">
-          <View
-            className="p-6 rounded-xl items-center"
-            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+        {/* Header */}
+        <View className="px-4 py-3 flex-row items-center justify-between">
+          <Text className="text-2xl font-bold" style={{ color: colors.text }}>
+            Profil
+          </Text>
+          <TouchableOpacity
+            onPress={handleLogout}
+            className="p-2"
           >
+            <Ionicons name="log-out" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Profile Info */}
+        <View
+          className="mx-4 mb-6 p-4 rounded-lg"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+        >
+          <View className="flex-row items-center mb-4">
             <View
-              className="w-20 h-20 rounded-full items-center justify-center mb-4"
-              style={{ backgroundColor: colors.primary }}
+              className="w-16 h-16 rounded-full items-center justify-center mr-4"
+              style={{ backgroundColor: colors.primary + '20' }}
             >
-              <Text className="text-white font-bold text-2xl">
-                {userInfo?.firstName?.charAt(0) || 'S'}
+              <Text className="text-2xl font-bold" style={{ color: colors.primary }}>
+                {userInfo?.firstName?.charAt(0) || userInfo?.displayName?.charAt(0) || 'S'}
               </Text>
             </View>
-            <Text className="text-xl font-bold mb-1" style={{ color: colors.text }}>
-              {userInfo?.displayName || 'Staff Member'}
-            </Text>
-            <Text className="text-sm mb-2" style={{ color: colors.textSecondary }}>
-              {userInfo?.email || 'staff@apu.hr'}
-            </Text>
-            <View
-              className="px-3 py-1 rounded-full"
-              style={{ backgroundColor: colors.primary }}
-            >
-              <Text className="text-white text-xs font-medium">
-                Osoblje
+            <View className="flex-1">
+              <Text className="text-xl font-bold mb-1" style={{ color: colors.text }}>
+                {userInfo?.firstName && userInfo?.lastName
+                  ? `${userInfo.firstName} ${userInfo.lastName}`
+                  : userInfo?.displayName || 'Staff Member'}
+              </Text>
+              <Text className="text-sm mb-1" style={{ color: colors.textSecondary }}>
+                {userInfo?.email || 'staff@apu.hr'}
+              </Text>
+              <View
+                className="px-2 py-1 rounded-full self-start"
+                style={{ backgroundColor: colors.primary }}
+              >
+                <Text className="text-white text-xs font-medium">
+                  Osoblje
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {userInfo && (
+            <View className="pt-3" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-sm" style={{ color: colors.textSecondary }}>
+                  Uloga:
+                </Text>
+                <Text className="text-sm font-medium" style={{ color: colors.text }}>
+                  {userInfo?.role || 'Osoblje'}
+                </Text>
+              </View>
+              {userInfo?.createdAt && (
+                <View className="flex-row justify-between">
+                  <Text className="text-sm" style={{ color: colors.textSecondary }}>
+                    Član od:
+                  </Text>
+                  <Text className="text-sm font-medium" style={{ color: colors.text }}>
+                    {formatDate(userInfo.createdAt)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Settings Section */}
+        <View
+          className="mx-4 mb-6 p-4 rounded-lg"
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text className="text-lg font-semibold mb-3" style={{ color: colors.text }}>
+            Postavke
+          </Text>
+
+          <View className="flex-row items-center justify-between py-2">
+            <View className="flex-row items-center">
+              <Ionicons
+                name={isDark ? "moon" : "sunny"}
+                size={20}
+                color={colors.textSecondary}
+                style={{ marginRight: 12 }}
+              />
+              <Text className="text-base" style={{ color: colors.text }}>
+                Tamna tema
               </Text>
             </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.border, true: colors.primary + '40' }}
+              thumbColor={isDark ? colors.primary : colors.textSecondary}
+            />
           </View>
         </View>
 
         {/* Statistics */}
-        <View className="px-6 pb-6">
-          <Text className="text-lg font-semibold mb-4" style={{ color: colors.text }}>
-            Statistike
-          </Text>
-          <View className="flex-row">
-            <StatItem title="Aktivne posudbe" value="12" colors={colors} />
-            <StatItem title="Ukupno opreme" value="45" colors={colors} />
-            <StatItem title="Studenti" value="25" colors={colors} />
+        {isLoading ? (
+          <View className="mx-4 mb-6 p-4 rounded-lg items-center" style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text className="text-sm mt-2" style={{ color: colors.textSecondary }}>
+              Učitavam statistike...
+            </Text>
           </View>
-        </View>
-
-        {/* Settings */}
-        <View className="px-6 pb-6">
-          <Text className="text-lg font-semibold mb-4" style={{ color: colors.text }}>
-            Postavke
-          </Text>
-
-
-          <TouchableOpacity
-            onPress={handleLogout}
-            className="flex-row items-center p-4 rounded-xl"
-            style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' }}
+        ) : (
+          <View
+            className="mx-4 mb-6 p-4 rounded-lg"
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
           >
-            <View
-              className="w-10 h-10 rounded-full items-center justify-center mr-4"
-              style={{ backgroundColor: '#dc2626' }}
-            >
-              <Ionicons name="log-out-outline" size={20} color="white" />
+            <Text className="text-lg font-semibold mb-3" style={{ color: colors.text }}>
+              Statistike
+            </Text>
+            <View className="flex-row justify-around mb-4">
+              <View className="items-center">
+                <Text className="text-2xl font-bold mb-1" style={{ color: colors.primary }}>
+                  {stats.totalEquipment}
+                </Text>
+                <Text className="text-sm text-center" style={{ color: colors.textSecondary }}>
+                  Ukupno{'\n'}opreme
+                </Text>
+              </View>
+              <View className="items-center">
+                <Text className="text-2xl font-bold mb-1" style={{ color: colors.warning }}>
+                  {stats.pendingRequests}
+                </Text>
+                <Text className="text-sm text-center" style={{ color: colors.textSecondary }}>
+                  Zahtjevi za{'\n'}odobrenje
+                </Text>
+              </View>
             </View>
-            <View className="flex-1">
-              <Text className="font-semibold" style={{ color: '#dc2626' }}>
-                Odjavi se
-              </Text>
-              <Text className="text-sm mt-1" style={{ color: '#b91c1c' }}>
-                Završi svoju sesiju
-              </Text>
+            <View className="flex-row justify-around">
+              <View className="items-center">
+                <Text className="text-2xl font-bold mb-1" style={{ color: colors.success }}>
+                  {stats.activeBookings}
+                </Text>
+                <Text className="text-sm text-center" style={{ color: colors.textSecondary }}>
+                  Aktivnih{'\n'}posudbi
+                </Text>
+              </View>
+              <View className="items-center">
+                <Text className="text-2xl font-bold mb-1" style={{ color: '#8b5cf6' }}>
+                  {stats.totalStudents}
+                </Text>
+                <Text className="text-sm text-center" style={{ color: colors.textSecondary }}>
+                  Ukupno{'\n'}studenata
+                </Text>
+              </View>
             </View>
-          </TouchableOpacity>
-        </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../../hooks/useColors';
+import { apiService } from '../../services/ApiService';
 
 const BorrowingDetailScreen = ({ route, navigation }) => {
   const colors = useColors();
   const { borrowing } = route.params;
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -26,6 +28,10 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
         return '#ef4444';
       case 'returned':
         return '#22c55e';
+      case 'pending':
+        return '#f59e0b';
+      case 'approved':
+        return '#3b82f6';
       case 'overdue':
         return '#f59e0b';
       default:
@@ -39,6 +45,10 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
         return 'Posuđeno';
       case 'returned':
         return 'Vraćeno';
+      case 'pending':
+        return 'Na čekanju';
+      case 'approved':
+        return 'Odobreno';
       case 'overdue':
         return 'Kasni s vraćanjem';
       default:
@@ -58,13 +68,6 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
       `Kontaktirajte ${borrowing.student}?`,
       [
         { text: 'Odustani', style: 'cancel' },
-        {
-          text: 'Chat',
-          onPress: () => navigation.navigate('Chat', {
-            otherUser: student,
-            equipment: { name: borrowing.equipment }
-          })
-        },
         {
           text: 'Email',
           onPress: () => Alert.alert('Email', `Šaljete email na: ${student.email}`)
@@ -89,6 +92,77 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
             onPress: () => {
               Alert.alert('Uspjeh', 'Oprema je označena kao vraćena!');
               navigation.goBack();
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  const handleApproveRequest = async () => {
+    if (borrowing.status === 'pending') {
+      Alert.alert(
+        'Odobri zahtjev',
+        `Odobriti zahtjev za posudbu opreme "${borrowing.equipment}"?`,
+        [
+          { text: 'Odustani', style: 'cancel' },
+          {
+            text: 'Odobri',
+            onPress: async () => {
+              try {
+                setIsLoading(true);
+                await apiService.updateBookingStatus(borrowing.id, 'APPROVED');
+                Alert.alert('Uspjeh', 'Zahtjev je odobren!');
+
+                // Trigger refresh on previous screens
+                if (route.params?.onRefresh) {
+                  route.params.onRefresh();
+                }
+
+                // Navigate back to dashboard after approval
+                navigation.navigate('Dashboard', { screen: 'StaffDashboard' });
+              } catch (error) {
+                console.error('Approve error:', error);
+                Alert.alert('Greška', 'Nije moguće odobriti zahtjev.');
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  const handleRejectRequest = async () => {
+    if (borrowing.status === 'pending') {
+      Alert.alert(
+        'Odbaci zahtjev',
+        `Odbaciti zahtjev za posudbu opreme "${borrowing.equipment}"?`,
+        [
+          { text: 'Odustani', style: 'cancel' },
+          {
+            text: 'Odbaci',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setIsLoading(true);
+                await apiService.updateBookingStatus(borrowing.id, 'CANCELLED', 'Odbačeno od strane osoblja');
+                Alert.alert('Uspjeh', 'Zahtjev je odbačen!');
+
+                // Trigger refresh on previous screens
+                if (route.params?.onRefresh) {
+                  route.params.onRefresh();
+                }
+
+                // Navigate back to dashboard after rejection
+                navigation.navigate('Dashboard', { screen: 'StaffDashboard' });
+              } catch (error) {
+                console.error('Reject error:', error);
+                Alert.alert('Greška', 'Nije moguće odbaciti zahtjev.');
+              } finally {
+                setIsLoading(false);
+              }
             }
           }
         ]
@@ -146,7 +220,9 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
                 <Ionicons
                   name={
                     borrowing.status === 'borrowed' ? 'arrow-up' :
-                    borrowing.status === 'returned' ? 'arrow-down' : 'warning'
+                    borrowing.status === 'returned' ? 'arrow-down' :
+                    borrowing.status === 'pending' ? 'hourglass' :
+                    borrowing.status === 'approved' ? 'checkmark' : 'warning'
                   }
                   size={20}
                   color="white"
@@ -218,7 +294,7 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
               className="p-2 rounded-full"
               style={{ backgroundColor: colors.primary + '20' }}
             >
-              <Ionicons name="chatbubble" size={20} color={colors.primary} />
+              <Ionicons name="mail" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -314,28 +390,55 @@ const BorrowingDetailScreen = ({ route, navigation }) => {
       </ScrollView>
 
       {/* Action Buttons */}
-      {borrowing.status !== 'returned' && (
+      {borrowing.status !== 'returned' && borrowing.status !== 'cancelled' && (
         <View className="p-4" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-          <View className="flex-row">
-            <TouchableOpacity
-              onPress={handleExtendBorrow}
-              className="flex-1 mr-2 py-3 rounded-xl"
-              style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
-            >
-              <Text className="text-center font-semibold" style={{ color: colors.text }}>
-                Produži
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleMarkReturned}
-              className="flex-1 ml-2 py-3 rounded-xl"
-              style={{ backgroundColor: colors.success }}
-            >
-              <Text className="text-center font-bold text-white">
-                Označi vraćeno
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {borrowing.status === 'pending' ? (
+            // Pending request buttons
+            <View className="flex-row">
+              <TouchableOpacity
+                onPress={handleRejectRequest}
+                disabled={isLoading}
+                className="flex-1 mr-2 py-3 rounded-xl"
+                style={{ backgroundColor: '#ef4444', opacity: isLoading ? 0.6 : 1 }}
+              >
+                <Text className="text-center font-bold text-white">
+                  Odbaci
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleApproveRequest}
+                disabled={isLoading}
+                className="flex-1 ml-2 py-3 rounded-xl"
+                style={{ backgroundColor: '#22c55e', opacity: isLoading ? 0.6 : 1 }}
+              >
+                <Text className="text-center font-bold text-white">
+                  Odobri
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Borrowed/Active equipment buttons
+            <View className="flex-row">
+              <TouchableOpacity
+                onPress={handleExtendBorrow}
+                className="flex-1 mr-2 py-3 rounded-xl"
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+              >
+                <Text className="text-center font-semibold" style={{ color: colors.text }}>
+                  Produži
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleMarkReturned}
+                className="flex-1 ml-2 py-3 rounded-xl"
+                style={{ backgroundColor: colors.success }}
+              >
+                <Text className="text-center font-bold text-white">
+                  Označi vraćeno
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
     </SafeAreaView>

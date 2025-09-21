@@ -1,6 +1,7 @@
-import { authorize, refresh } from 'react-native-app-auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { aaiAuthConfig } from './authConfig';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 
 // Storage keys
 const USER_DATA_KEY = 'aai_user_data';
@@ -12,28 +13,179 @@ class AuthService {
    */
   async login() {
     try {
-      console.log('Starting AAI@EduHr authentication...');
+      // Clear any existing auth state first
+      await this.logout();
 
-      const result = await authorize(aaiAuthConfig);
+      // Configure WebBrowser for better popup handling
+      WebBrowser.maybeCompleteAuthSession();
 
-      if (!result.idToken) {
-        throw new Error('No ID token received from AAI@EduHr');
+      // Create the authorization request
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'apuoprema',
+        path: 'oauth/callback'
+      });
+
+      const authRequestConfig = {
+        clientId: aaiAuthConfig.clientId,
+        scopes: aaiAuthConfig.scopes,
+        responseType: AuthSession.ResponseType.Code,
+        redirectUri: redirectUri,
+        usePKCE: true,
+        additionalParameters: aaiAuthConfig.additionalParameters || {},
+      };
+
+      const authRequest = new AuthSession.AuthRequest(authRequestConfig);
+
+      // Discover the authorization endpoint
+      const discoveryResult = await AuthSession.fetchDiscoveryAsync(aaiAuthConfig.issuer);
+
+      // Start the authorization flow
+      const authResult = await authRequest.promptAsync(discoveryResult, {
+        useProxy: false, // Important for Expo managed workflow
+        showInRecents: false
+      });
+
+      if (authResult.type !== 'success') {
+        throw new Error(`Authentication cancelled or failed: ${authResult.type}`);
       }
 
-      // Parse user info from ID token
-      const userInfo = this.parseIdToken(result.idToken);
+      if (!authResult.params?.code) {
+        throw new Error('No authorization code received');
+      }
+
+      // Manual token exchange (AAI@EduHr specific requirements)
+      const tokenRequestBody = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: authResult.params.code,
+        redirect_uri: redirectUri,
+        client_id: aaiAuthConfig.clientId,
+        code_verifier: authRequest.codeVerifier, // PKCE verifier
+      });
+
+      const tokenResponse = await fetch(discoveryResult.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: tokenRequestBody.toString(),
+      });
+
+      const tokenResponseText = await tokenResponse.text();
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Token exchange failed: ${tokenResponse.status} - ${tokenResponseText}`);
+      }
+
+      const tokenResult = JSON.parse(tokenResponseText);
+
+      if (!tokenResult.access_token) {
+        throw new Error('No access token received');
+      }
+
+      // Get user info from userinfo endpoint (more reliable than ID token)
+      let userInfo = {};
+
+      try {
+        console.log('Fetching user info from AAI@EduHr userinfo endpoint:', discoveryResult.userInfoEndpoint);
+        const userInfoResponse = await fetch(discoveryResult.userInfoEndpoint, {
+          headers: {
+            'Authorization': `Bearer ${tokenResult.access_token}`,
+          },
+        });
+
+        if (userInfoResponse.ok) {
+          const userInfoData = await userInfoResponse.json();
+          console.log('Raw userinfo response:', userInfoData);
+
+          userInfo = {
+            sub: userInfoData.sub || userInfoData.hrEduPersonUniqueID,
+            email: userInfoData.email || userInfoData.mail,
+            name: userInfoData.name || userInfoData.displayName || `${userInfoData.given_name || ''} ${userInfoData.family_name || ''}`.trim(),
+            givenName: userInfoData.given_name || userInfoData.givenName,
+            familyName: userInfoData.family_name || userInfoData.sn,
+            roles: userInfoData.hrEduPersonRole || ['student'],
+            hrEduPersonUniqueID: userInfoData.hrEduPersonUniqueID,
+            hrEduPersonAffiliation: userInfoData.hrEduPersonAffiliation,
+            hrEduPersonHomeOrg: userInfoData.hrEduPersonHomeOrg,
+            nickname: userInfoData.nickname,
+            preferredUsername: userInfoData.preferred_username
+          };
+        } else {
+          console.log('Userinfo endpoint failed, trying ID token...');
+          userInfo = this.parseIdToken(tokenResult.id_token);
+        }
+      } catch (userInfoError) {
+        console.log('Could not fetch user info, trying ID token fallback');
+        userInfo = this.parseIdToken(tokenResult.id_token);
+      }
+
+      // Final fallback
+      if (!userInfo.sub) {
+        console.log('No user data available, using minimal fallback');
+        userInfo = {
+          sub: `aai_user_${Date.now()}`,
+          email: 'user@apu.hr',
+          name: 'AAI User',
+          givenName: 'AAI',
+          familyName: 'User',
+          roles: ['student']
+        };
+      }
 
       // Store tokens and user data
       await AsyncStorage.setItem(TOKENS_KEY, JSON.stringify({
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        idToken: result.idToken
+        accessToken: tokenResult.access_token,
+        refreshToken: tokenResult.refresh_token,
+        idToken: tokenResult.id_token
       }));
+
+      // Sync user with backend
+      try {
+        console.log('Syncing user with backend...');
+        const backendResponse = await this.syncUserWithBackend(userInfo, tokenResult.access_token);
+
+        // Update user info with backend data and use backend token for API calls
+        userInfo.backendUser = backendResponse.user;
+
+        // Store backend token for API authentication
+        await AsyncStorage.setItem(TOKENS_KEY, JSON.stringify({
+          accessToken: backendResponse.token, // Use backend JWT token
+          refreshToken: tokenResult.refresh_token,
+          idToken: tokenResult.id_token,
+          aaiAccessToken: tokenResult.access_token // Keep original AAI token
+        }));
+
+        console.log('Backend sync successful');
+      } catch (backendError) {
+        console.log('Backend sync failed:', backendError.message);
+        console.log('Continuing with AAI-only authentication');
+      }
 
       await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userInfo));
 
-      console.log('Authentication successful');
-      return result;
+      console.log('AAI@EduHr Authentication Successful!');
+      console.log('Token Data:', {
+        hasAccessToken: !!tokenResult.access_token,
+        hasIdToken: !!tokenResult.id_token,
+        hasRefreshToken: !!tokenResult.refresh_token,
+        tokenType: tokenResult.token_type,
+        expiresIn: tokenResult.expires_in
+      });
+
+      console.log('Final User Info:', {
+        userId: userInfo.sub,
+        email: userInfo.email,
+        name: userInfo.name,
+        givenName: userInfo.givenName,
+        familyName: userInfo.familyName,
+        roles: userInfo.roles,
+        uniqueID: userInfo.hrEduPersonUniqueID,
+        affiliation: userInfo.hrEduPersonAffiliation,
+        homeOrg: userInfo.hrEduPersonHomeOrg
+      });
+
+      return tokenResult;
 
     } catch (error) {
       console.error('Authentication failed:', error);
@@ -99,20 +251,37 @@ class AuthService {
    */
   parseIdToken(idToken) {
     try {
-      const payload = idToken.split('.')[1];
+      if (!idToken || typeof idToken !== 'string') {
+        throw new Error('Invalid ID token format');
+      }
+
+      const parts = idToken.split('.');
+      if (parts.length !== 3) {
+        throw new Error('ID token should have 3 parts');
+      }
+
+      const payload = parts[1];
       const decoded = JSON.parse(atob(payload));
 
       return {
-        sub: decoded.sub,
-        email: decoded.email || decoded.mail,
-        name: decoded.name || decoded.displayName,
-        givenName: decoded.given_name || decoded.givenName,
-        familyName: decoded.family_name || decoded.sn,
-        roles: decoded.hrEduPersonRole || []
+        sub: decoded.sub || 'unknown_user',
+        email: decoded.email || decoded.mail || 'user@apu.hr',
+        name: decoded.name || decoded.displayName || 'AAI User',
+        givenName: decoded.given_name || decoded.givenName || 'User',
+        familyName: decoded.family_name || decoded.sn || 'AAI',
+        roles: decoded.hrEduPersonRole || decoded.roles || ['student']
       };
     } catch (error) {
       console.error('Failed to parse ID token:', error);
-      return {};
+      // Return fallback user info instead of empty object
+      return {
+        sub: `fallback_user_${Date.now()}`,
+        email: 'user@apu.hr',
+        name: 'AAI User',
+        givenName: 'User',
+        familyName: 'AAI',
+        roles: ['student']
+      };
     }
   }
 
@@ -145,8 +314,12 @@ class AuthService {
 
   // Development helpers
   async loginDev(role = 'student') {
+    // Use consistent userId for each role to maintain same user
+    const userId = role === 'staff' ? '1005' : '1001'; // Fixed IDs
+
     const mockUser = {
-      sub: `dev_${role}_${Date.now()}`,
+      sub: `dev_${role}_${userId}`,
+      userId: `mock_user_${userId}`, // Match backend auth middleware format
       email: `${role}@apu.hr`,
       name: role === 'staff' ? 'Test Staff' : 'Test Student',
       givenName: 'Test',
@@ -155,15 +328,58 @@ class AuthService {
     };
 
     const mockTokens = {
-      accessToken: `dev_access_${Date.now()}`,
-      refreshToken: `dev_refresh_${Date.now()}`,
-      idToken: `dev_id_${Date.now()}`
+      accessToken: `dev_access_${userId}`,
+      refreshToken: `dev_refresh_${userId}`,
+      idToken: `dev_id_${userId}`
     };
 
     await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
     await AsyncStorage.setItem(TOKENS_KEY, JSON.stringify(mockTokens));
 
+    console.log(`DEV: Logged in as ${role.toUpperCase()} with consistent userId: ${userId}`);
     return mockTokens;
+  }
+
+  // Quick role switcher for development
+  async switchToStaff() {
+    console.log('Switching to STAFF role for testing...');
+    return await this.loginDev('staff');
+  }
+
+  async switchToStudent() {
+    console.log('Switching to STUDENT role for testing...');
+    return await this.loginDev('student');
+  }
+
+  /**
+   * Sync AAI user with backend
+   */
+  async syncUserWithBackend(userInfo, aaiToken) {
+    try {
+      const response = await fetch('http://YOUR_LOCAL_IP:3000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userInfo,
+          aaiToken
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Backend sync failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Backend user created/updated:', data.user);
+
+      return data;
+    } catch (error) {
+      console.error('Backend sync error:', error);
+      throw error;
+    }
   }
 }
 

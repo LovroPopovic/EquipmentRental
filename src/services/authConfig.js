@@ -7,12 +7,29 @@ export const aaiAuthConfig = {
   clientId: 'YOUR_AAI_CLIENT_ID',
   redirectUrl: 'apuoprema://oauth/callback',
 
-  scopes: ['openid', 'profile', 'email', 'hrEduPersonRole'],
+  scopes: [
+    'openid',
+    'profile',
+    'email',
+    'hrEduPersonRole',           // Staff vs Student role detection
+    'hrEduPersonUniqueID',       // Unique university ID
+    'givenName',                 // First name
+    'sn',                        // Last name (surname)
+    'displayName',               // Full display name
+    'hrEduPersonAffiliation',    // University affiliation
+    'hrEduPersonHomeOrg'         // Home organization
+  ],
 
   discoveryUrl: 'https://fed-lab.aaiedu.hr/.well-known/openid-configuration',
 
   usePKCE: true,
-  useNonce: true,
+  useNonce: false, // Try disabling nonce
 
-  additionalParameters: {},
+  additionalParameters: {
+    prompt: 'login' // Force fresh login
+  },
+
+  // Add timeout settings
+  connectionTimeoutSeconds: 30,
+  readTimeoutSeconds: 30,
 };
