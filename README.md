@@ -87,7 +87,7 @@ Uredi `src/services/authConfig.js`:
 export const aaiAuthConfig = {
   // TEST Environment - AAI@EduHr Lab
   issuer: 'https://fed-lab.aaiedu.hr',
-  clientId: 'tvoj-client-id',
+  clientId: 'YOUR_AAI_CLIENT_ID',
   redirectUrl: 'apuoprema://oauth/callback',
 
   scopes: [

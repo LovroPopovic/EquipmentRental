@@ -51,7 +51,7 @@
         "projectId": "YOUR_EAS_PROJECT_ID"
       },
       "aaiAuthConfig": {
-        "clientId": "apu-equipment-rental-mobile",
+        "clientId": "YOUR_AAI_CLIENT_ID",
         "issuer": "https://login.aaiedu.hr"
       }
     },
